@@ -19,6 +19,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     networks:
       - rag-network
 
@@ -36,6 +42,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
     networks:
       - rag-network
 
@@ -55,6 +67,12 @@ services:
       timeout: 10s
       retries: 10
       start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 12G
     networks:
       - rag-network
 
@@ -74,6 +92,12 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./uploads:/app/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +118,12 @@ services:
       - ./frontend/src:/app/src
     environment:
       VITE_API_URL: http://localhost:8050
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     depends_on:
       - backend
     networks:

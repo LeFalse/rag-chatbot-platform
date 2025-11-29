@@ -21,35 +21,54 @@ from app.models.metric import Metric
 settings = get_settings()
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(autouse=True, scope="function")
+def reset_db_isolation():
+    """Reset DB isolation for each test."""
+    yield
+
+
+@pytest_asyncio.fixture(scope="session")
+async def engine():
+    """Create a single engine for all tests to avoid memory issues."""
+    test_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
+    yield test_engine
+    await test_engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
-async def async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Create async session for testing."""
-    # Use the same database as the app for integration tests
-    engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-    )
-
+async def session(engine) -> AsyncGenerator[AsyncSession, None]:
+    """Create async session for testing, reusing the same engine."""
     async_session_maker = async_sessionmaker(
         engine,
         class_=AsyncSession,
-        expire_on_commit=False,
+        expire_on_commit=True,
     )
 
-    async with async_session_maker() as session:
-        yield session
-        # Rollback any changes made during the test
-        await session.rollback()
+    test_session = await async_session_maker().__aenter__()
+    try:
+        yield test_session
+    finally:
+        # Ensure proper cleanup of the session
+        try:
+            await test_session.rollback()
+        except Exception:
+            pass
+        try:
+            await test_session.close()
+        except Exception:
+            pass
+        # Dispose of the connection back to the pool
+        await engine.dispose()
 
-    await engine.dispose()
+
+# Keep async_session as alias for backward compatibility
+async_session = session
 
 
 @pytest.fixture
