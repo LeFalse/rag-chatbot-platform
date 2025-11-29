@@ -1,5 +1,17 @@
 """Providers module - external service abstractions."""
 
+from app.providers.embedding import (
+    BaseEmbeddingProvider,
+    BatchEmbeddingResult,
+    EmbeddingConfig,
+    EmbeddingProviderError,
+    EmbeddingProviderType,
+    EmbeddingResult,
+    OllamaEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    create_embedding_provider,
+    get_available_embedding_providers,
+)
 from app.providers.llm import (
     BaseLLMProvider,
     ChatMessage,
@@ -27,4 +39,15 @@ __all__ = [
     "LLMResponse",
     "StreamChunk",
     "LLMProviderError",
+    # Embedding
+    "BaseEmbeddingProvider",
+    "OllamaEmbeddingProvider",
+    "OpenAIEmbeddingProvider",
+    "create_embedding_provider",
+    "get_available_embedding_providers",
+    "EmbeddingProviderType",
+    "EmbeddingConfig",
+    "EmbeddingResult",
+    "BatchEmbeddingResult",
+    "EmbeddingProviderError",
 ]
