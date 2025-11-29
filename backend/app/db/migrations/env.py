@@ -13,14 +13,12 @@ from app.core.config import get_settings
 from app.db.base import Base
 
 # Import all models so Alembic can see them
-from app.models import (  # noqa: F401
-    Collection,
-    Document,
-    Chunk,
-    Conversation,
-    Message,
-    Metric,
-)
+from app.models.chunk import Chunk  # noqa: F401
+from app.models.collection import Collection  # noqa: F401
+from app.models.conversation import Conversation  # noqa: F401
+from app.models.document import Document  # noqa: F401
+from app.models.message import Message  # noqa: F401
+from app.models.metric import Metric  # noqa: F401
 
 config = context.config
 settings = get_settings()

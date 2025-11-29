@@ -3,8 +3,11 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Conversation, Message
-from app.repositories import ConversationRepository, MessageRepository
+from app.models.collection import Collection
+from app.models.conversation import Conversation
+from app.models.message import Message
+from app.repositories.conversation_repo import ConversationRepository
+from app.repositories.message_repo import MessageRepository
 
 
 @pytest.mark.asyncio

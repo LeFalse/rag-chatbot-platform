@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import Collection, Document, Chunk, Conversation, Message, Metric
+from app.models.chunk import Chunk
+from app.models.collection import Collection
+from app.models.conversation import Conversation
+from app.models.document import Document
+from app.models.message import Message
+from app.models.metric import Metric
 
 settings = get_settings()
 

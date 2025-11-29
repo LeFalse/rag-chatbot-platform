@@ -5,7 +5,7 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection
+from app.models.collection import Collection
 from app.repositories.base import BaseRepository
 
 

@@ -3,8 +3,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection
-from app.repositories import CollectionRepository
+from app.models.collection import Collection
+from app.repositories.collection_repo import CollectionRepository
 
 
 @pytest.mark.asyncio

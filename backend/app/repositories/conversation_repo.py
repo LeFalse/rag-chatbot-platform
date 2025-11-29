@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Conversation
+from app.models.conversation import Conversation
 from app.repositories.base import BaseRepository
 
 

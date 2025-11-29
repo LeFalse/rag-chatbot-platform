@@ -6,7 +6,7 @@ from typing import Sequence
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Metric
+from app.models.metric import Metric
 from app.repositories.base import BaseRepository
 
 

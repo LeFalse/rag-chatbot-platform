@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.providers.embedding import (
-    EmbeddingConfig,
+from app.providers.embedding.exceptions import (
     EmbeddingConnectionError,
     EmbeddingInvalidRequestError,
-    OllamaEmbeddingProvider,
-    OpenAIEmbeddingProvider,
-    create_embedding_provider,
 )
+from app.providers.embedding.factory import create_embedding_provider
+from app.providers.embedding.ollama import OllamaEmbeddingProvider
+from app.providers.embedding.openai import OpenAIEmbeddingProvider
+from app.providers.embedding.types import EmbeddingConfig
 
 
 # Fixtures

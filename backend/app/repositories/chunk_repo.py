@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Chunk
+from app.models.chunk import Chunk
 from app.repositories.base import BaseRepository
 
 

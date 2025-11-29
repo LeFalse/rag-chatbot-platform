@@ -6,15 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.providers.llm import (
-    ChatMessage,
-    LLMConfig,
-    LLMConnectionError,
-    LLMInvalidRequestError,
-    OllamaProvider,
-    OpenAIProvider,
-    create_llm_provider,
-)
+from app.providers.llm.exceptions import LLMConnectionError, LLMInvalidRequestError
+from app.providers.llm.factory import create_llm_provider
+from app.providers.llm.ollama import OllamaProvider
+from app.providers.llm.openai import OpenAIProvider
+from app.providers.llm.types import ChatMessage, LLMConfig
 
 
 # Fixtures
