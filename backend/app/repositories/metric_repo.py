@@ -16,6 +16,17 @@ class MetricRepository(BaseRepository[Metric]):
     def __init__(self, session: AsyncSession):
         super().__init__(Metric, session)
 
+    async def get_since(
+        self,
+        since: datetime,
+        limit: int = 1000,
+    ) -> Sequence[Metric]:
+        """Get metrics created since a specific datetime."""
+        query = select(Metric).where(Metric.created_at >= since)
+        query = query.order_by(Metric.created_at.desc()).limit(limit)
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
     async def get_by_type(
         self,
         metric_type: str,

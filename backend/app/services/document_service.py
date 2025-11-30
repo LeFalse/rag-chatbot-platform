@@ -1,5 +1,6 @@
 """Document service - handles upload, chunking, and storage."""
 
+import asyncio
 import hashlib
 import os
 from pathlib import Path
@@ -36,7 +37,6 @@ class DocumentService:
         self.doc_repo = DocumentRepository(session)
         self.chunk_repo = ChunkRepository(session)
         self.collection_repo = CollectionRepository(session)
-        self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     async def upload_document(
         self,
@@ -60,7 +60,7 @@ class DocumentService:
             ValueError: If file is too large or collection doesn't exist.
         """
         # Validate collection exists
-        collection = await self.collection_repo.get(collection_id)
+        collection = await self.collection_repo.get_by_id(collection_id)
         if not collection:
             raise ValueError(f"Collection {collection_id} not found")
 
@@ -75,10 +75,10 @@ class DocumentService:
         if existing:
             raise ValueError(f"Document '{filename}' already exists in collection")
 
-        # Save file to disk
+        # Save file to disk (async-safe file I/O)
         file_path = self.UPLOAD_DIR / str(collection_id) / filename
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_bytes(file_content)
+        await asyncio.to_thread(file_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(file_path.write_bytes, file_content)
 
         # Create document record
         document = DocumentModel(
@@ -118,7 +118,7 @@ class DocumentService:
             ValueError: If document not found or extraction fails.
         """
         # Get document
-        document = await self.doc_repo.get(document_id)
+        document = await self.doc_repo.get_by_id(document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found")
 
@@ -181,7 +181,7 @@ class DocumentService:
         Raises:
             ValueError: If document not found.
         """
-        document = await self.doc_repo.get(document_id)
+        document = await self.doc_repo.get_by_id(document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found")
 
@@ -191,14 +191,14 @@ class DocumentService:
         # Delete document
         await self.doc_repo.delete(document_id)
 
-        # Delete file from disk
+        # Delete file from disk (async-safe file I/O)
         file_path = (
             self.UPLOAD_DIR
             / str(document.collection_id)
             / document.filename
         )
-        if file_path.exists():
-            file_path.unlink()
+        if await asyncio.to_thread(file_path.exists):
+            await asyncio.to_thread(file_path.unlink)
 
     async def get_document_stats(self, document_id: UUID) -> dict:
         """Get statistics about a document.

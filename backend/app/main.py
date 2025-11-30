@@ -3,6 +3,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.documents import router as documents_router
+from app.api.routes.chat import router as chat_router
+from app.api.routes.metrics import router as metrics_router
+
 app = FastAPI(
     title="RAG Chatbot Platform",
     description="A Retrieval-Augmented Generation chatbot platform",
@@ -17,6 +21,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(documents_router)
+app.include_router(chat_router)
+app.include_router(metrics_router)
 
 
 @app.get("/health")

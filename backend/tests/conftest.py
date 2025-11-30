@@ -7,10 +7,13 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.session import get_session
+from app.main import app
 from app.models.chunk import Chunk
 from app.models.collection import Collection
 from app.models.conversation import Conversation
@@ -168,3 +171,16 @@ async def conversation(
     yield conv
     await async_session.delete(conv)
     await async_session.flush()
+
+
+@pytest.fixture
+def client(session):
+    """Create a test client with the test database session."""
+    # Override get_session to return the test session
+    async def override_get_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_get_session
+    test_client = TestClient(app)
+    yield test_client
+    app.dependency_overrides.clear()
