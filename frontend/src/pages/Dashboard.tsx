@@ -293,44 +293,53 @@ export const Dashboard: React.FC = () => {
               </button>
             </div>
             <div className="modal-body message-detail-body">
-              {/* Token Stats */}
-              <div className="message-stats-grid">
-                <div className="stat-item">
-                  <span className="stat-label">Input Tokens</span>
-                  <span className="stat-value tokens-input">
-                    {selectedMessage.tokens_input !== null ? formatNumber(selectedMessage.tokens_input) : '-'}
-                  </span>
+              {/* Token Stats - Only for assistant messages */}
+              {selectedMessage.role === 'assistant' ? (
+                <div className="message-stats-grid">
+                  <div className="stat-item">
+                    <span className="stat-label">Input Tokens</span>
+                    <span className="stat-value tokens-input">
+                      {selectedMessage.tokens_input !== null ? formatNumber(selectedMessage.tokens_input) : '-'}
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Output Tokens</span>
+                    <span className="stat-value tokens-output">
+                      {selectedMessage.tokens_output !== null ? formatNumber(selectedMessage.tokens_output) : '-'}
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Total Tokens</span>
+                    <span className="stat-value">
+                      {selectedMessage.tokens_used !== null ? formatNumber(selectedMessage.tokens_used) : '-'}
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Latency</span>
+                    <span className="stat-value">
+                      {selectedMessage.latency_ms !== null ? `${selectedMessage.latency_ms}ms` : '-'}
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Model</span>
+                    <span className="stat-value">{selectedMessage.model || '-'}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Time</span>
+                    <span className="stat-value">{formatDate(selectedMessage.created_at)}</span>
+                  </div>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-label">Output Tokens</span>
-                  <span className="stat-value tokens-output">
-                    {selectedMessage.tokens_output !== null ? formatNumber(selectedMessage.tokens_output) : '-'}
-                  </span>
+              ) : (
+                <div className="message-stats-grid user-stats">
+                  <div className="stat-item">
+                    <span className="stat-label">Time</span>
+                    <span className="stat-value">{formatDate(selectedMessage.created_at)}</span>
+                  </div>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-label">Total Tokens</span>
-                  <span className="stat-value">
-                    {selectedMessage.tokens_used !== null ? formatNumber(selectedMessage.tokens_used) : '-'}
-                  </span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Latency</span>
-                  <span className="stat-value">
-                    {selectedMessage.latency_ms !== null ? `${selectedMessage.latency_ms}ms` : '-'}
-                  </span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Model</span>
-                  <span className="stat-value">{selectedMessage.model || '-'}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Time</span>
-                  <span className="stat-value">{formatDate(selectedMessage.created_at)}</span>
-                </div>
-              </div>
+              )}
 
-              {/* Retrieved Context - Simple list with scores */}
-              {selectedMessage.context_chunks && selectedMessage.context_chunks.length > 0 && (
+              {/* Retrieved Context - Only for assistant messages */}
+              {selectedMessage.role === 'assistant' && selectedMessage.context_chunks && selectedMessage.context_chunks.length > 0 && (
                 <div className="context-chunks-simple">
                   <span className="context-label">Sources:</span>
                   {selectedMessage.context_chunks.map((chunk, index) => (
@@ -341,29 +350,47 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Input (Prompt) - Collapsible */}
-              {selectedMessage.prompt_input && (
-                <details className="expandable-section">
+              {/* For assistant messages: show prompt input and response */}
+              {selectedMessage.role === 'assistant' && (
+                <>
+                  {/* Input (Prompt) - Collapsible */}
+                  {selectedMessage.prompt_input && (
+                    <details className="expandable-section">
+                      <summary className="expandable-header">
+                        <span className="expandable-title">Input (Full Prompt)</span>
+                        <span className="expandable-hint">Click to expand</span>
+                      </summary>
+                      <div className="message-content-box">
+                        <pre>{selectedMessage.prompt_input}</pre>
+                      </div>
+                    </details>
+                  )}
+
+                  {/* Output (Response) - Collapsible */}
+                  <details className="expandable-section" open>
+                    <summary className="expandable-header">
+                      <span className="expandable-title">Response</span>
+                      <span className="expandable-hint">Click to collapse</span>
+                    </summary>
+                    <div className="message-content-box">
+                      <pre>{selectedMessage.content}</pre>
+                    </div>
+                  </details>
+                </>
+              )}
+
+              {/* For user messages: show the question */}
+              {selectedMessage.role === 'user' && (
+                <details className="expandable-section" open>
                   <summary className="expandable-header">
-                    <span className="expandable-title">Input (Full Prompt)</span>
-                    <span className="expandable-hint">Click to expand</span>
+                    <span className="expandable-title">User Question</span>
+                    <span className="expandable-hint">Click to collapse</span>
                   </summary>
                   <div className="message-content-box">
-                    <pre>{selectedMessage.prompt_input}</pre>
+                    <pre>{selectedMessage.content}</pre>
                   </div>
                 </details>
               )}
-
-              {/* Output (Response) - Collapsible */}
-              <details className="expandable-section" open>
-                <summary className="expandable-header">
-                  <span className="expandable-title">Output (Response)</span>
-                  <span className="expandable-hint">Click to collapse</span>
-                </summary>
-                <div className="message-content-box">
-                  <pre>{selectedMessage.content}</pre>
-                </div>
-              </details>
             </div>
             <div className="modal-footer">
               <Button variant="secondary" onClick={() => setSelectedMessage(null)}>
