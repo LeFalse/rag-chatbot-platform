@@ -409,18 +409,41 @@ class TestRateLimiterIntegration:
     @pytest.mark.asyncio
     async def test_concurrent_requests(self, rate_limiter: RateLimiter):
         """Test that concurrent requests are handled atomically."""
-        identifier = f"user-concurrent-{time.time()}"
+        identifier = f"user-concurrent-{int(time.time() * 1000000)}"
+        limit = 5
+
+        # Clean state before test
+        await rate_limiter.reset(identifier)
 
         # Send 10 concurrent requests with limit of 5
-        tasks = [rate_limiter.acquire(identifier) for _ in range(10)]
+        tasks = [rate_limiter.acquire(identifier, limit=limit, window=60) for _ in range(10)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Exactly 5 should succeed, 5 should fail
-        successes = [r for r in results if isinstance(r, type(results[0])) and hasattr(r, 'allowed')]
-        failures = [r for r in results if isinstance(r, RateLimitExceeded)]
+        # Separate successes and failures by type
+        successes = []
+        failures = []
 
-        assert len(successes) == 5
-        assert len(failures) == 5
+        for result in results:
+            if isinstance(result, RateLimitExceeded):
+                failures.append(result)
+            elif isinstance(result, Exception):
+                # Unexpected exception - should not happen
+                raise AssertionError(f"Unexpected exception: {result}")
+            else:
+                # Should be RateLimitInfo object with allowed=True
+                assert hasattr(result, 'allowed'), f"Expected RateLimitInfo, got {type(result)}"
+                assert result.allowed is True, "Successful result should have allowed=True"
+                successes.append(result)
+
+        # Exactly 5 should succeed, 5 should fail with RateLimitExceeded
+        assert len(successes) == limit, f"Expected {limit} successes, got {len(successes)}"
+        assert len(failures) == (10 - limit), f"Expected {10 - limit} failures, got {len(failures)}"
+
+        # Verify all failures are RateLimitExceeded with correct limits
+        for failure in failures:
+            assert isinstance(failure, RateLimitExceeded)
+            assert failure.limit == limit
+            assert failure.retry_after > 0
 
     @pytest.mark.asyncio
     async def test_get_usage(self, rate_limiter: RateLimiter):

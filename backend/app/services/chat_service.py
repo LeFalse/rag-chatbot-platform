@@ -1,5 +1,6 @@
 """Chat service - implements RAG pipeline with streaming."""
 
+import json
 import time
 from collections.abc import AsyncIterator
 from uuid import UUID
@@ -20,10 +21,19 @@ from app.services.embedding_service import EmbeddingService
 class ChatService:
     """Service for chat with RAG (Retrieval-Augmented Generation)."""
 
-    SYSTEM_PROMPT = """You are a helpful assistant answering questions based on provided documents.
-Use the context provided to answer questions accurately.
-If the answer is not in the context, say so clearly.
-Always cite the source when referencing the documents."""
+    SYSTEM_PROMPT = """You are a precise assistant that answers questions based ONLY on the provided documents.
+
+Critical Instructions:
+- Read the context CAREFULLY before answering
+- Pay special attention to tables - read ALL columns and rows precisely
+- Answer EXACTLY what is asked - do not generalize or summarize incorrectly
+- "Manual" and "Manual with approval" are DIFFERENT things
+- If the answer is not in the context, say "I couldn't find this information in the available documents"
+- Do NOT mention document names, filenames, or sources in your response - sources are shown separately
+- Do NOT mention relevance percentages, similarity scores, or technical metadata
+- Do NOT invent information not present in the context
+- Be direct and concise - just answer the question
+- Respond in the same language as the user's question"""
 
     def __init__(
         self,
@@ -79,10 +89,19 @@ Always cite the source when referencing the documents."""
         if not conversation:
             raise ValueError(f"Conversation {conversation_id} not found")
 
-        # Get recent conversation history from cache
-        cache_key = f"conv:{conversation_id}:messages"
-        cached_messages = await self.session_cache.get_messages(cache_key)
-        messages: list[ChatMessage] = cached_messages or []
+        # Get recent conversation history from cache (limit to last 6 messages for performance)
+        cached_message_data = []
+        if self.session_cache:
+            cached_message_data = await self.session_cache.get_messages(
+                str(conversation_id),
+                limit=6,  # Keep last 3 exchanges (user+assistant pairs)
+            )
+
+        # Convert MessageData to ChatMessage (filter out timestamp field)
+        messages: list[ChatMessage] = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in cached_message_data
+        ]
 
         # Generate embedding for question
         question_embedding = await self.embedding_service.embed_text(question)
@@ -97,8 +116,9 @@ Always cite the source when referencing the documents."""
         )
         search_latency_ms = int((time.time() - start_time) * 1000)
 
-        # Build context from chunks
+        # Build context from chunks and prepare metadata for storage
         context = self._build_context(similar_chunks)
+        context_chunks_data = self._build_context_metadata(similar_chunks)
 
         # Add user message to history
         user_message = ChatMessage(role="user", content=question)
@@ -112,6 +132,14 @@ Always cite the source when referencing the documents."""
         )
         self.session.add(user_db_message)
         await self.session.flush()
+
+        # Add user message to cache if available
+        if self.session_cache:
+            await self.session_cache.add_message(
+                str(conversation_id),
+                "user",
+                question,
+            )
 
         # Add system message with context if not already there
         has_system = any(
@@ -133,30 +161,60 @@ Always cite the source when referencing the documents."""
                 content=f"{self.SYSTEM_PROMPT}\n\nContext:\n{context}",
             )
 
+        # Build full prompt string for debugging
+        full_prompt = self._build_prompt_string(messages)
+
         # Generate streaming response
         response_content = ""
+        tokens_input = None
+        tokens_output = None
         start_time = time.time()
 
         async for chunk in self.llm_provider.generate_stream(messages):
             response_content += chunk.content
             yield chunk.content
+            # Capture token counts from final chunk
+            if chunk.is_final:
+                tokens_input = chunk.tokens_input
+                tokens_output = chunk.tokens_output
 
         latency_ms = int((time.time() - start_time) * 1000)
+
+        # Yield sources metadata at the end (special marker for frontend)
+        sources_json = json.dumps({"sources": context_chunks_data})
+        yield f"\n[SOURCES]{sources_json}[/SOURCES]"
+
+        # Calculate total tokens
+        total_tokens = None
+        if tokens_input is not None and tokens_output is not None:
+            total_tokens = tokens_input + tokens_output
 
         # Save assistant message to DB
         assistant_message = Message(
             conversation_id=conversation_id,
             role="assistant",
             content=response_content,
+            prompt_input=full_prompt,
+            context_chunks=context_chunks_data,
             latency_ms=latency_ms,
             model=self.llm_provider.provider_name,
+            tokens_input=tokens_input,
+            tokens_output=tokens_output,
+            tokens_used=total_tokens,
         )
         self.session.add(assistant_message)
         await self.session.flush()
 
-        # Update session cache with new messages
-        messages.append(ChatMessage(role="assistant", content=response_content))
-        await self.session_cache.set_messages(cache_key, messages)
+        # Update session cache with assistant message if cache is available
+        if self.session_cache:
+            await self.session_cache.add_message(
+                str(conversation_id),
+                "assistant",
+                response_content,
+            )
+
+        # Commit transaction to persist messages to database
+        await self.session.commit()
 
     async def get_conversation_history(
         self,
@@ -201,7 +259,7 @@ Always cite the source when referencing the documents."""
         """Build context string from similar chunks.
 
         Args:
-            similar_chunks: List of (chunk, similarity_score) tuples.
+            similar_chunks: List of (chunk, similarity_score, filename) tuples.
 
         Returns:
             Formatted context string.
@@ -210,10 +268,58 @@ Always cite the source when referencing the documents."""
             return "No relevant context found."
 
         context_parts = []
-        for chunk, score in similar_chunks:
+        for chunk, score, filename in similar_chunks:
             context_parts.append(
-                f"[Document: {chunk.document.filename} (relevance: {score:.2%})]\n"
+                f"[Document: {filename} (relevance: {score:.2%})]\n"
                 f"{chunk.content}\n"
             )
 
         return "\n".join(context_parts)
+
+    def _build_context_metadata(
+        self,
+        similar_chunks: list[tuple],
+    ) -> list[dict]:
+        """Build metadata for similar chunks, grouped by filename with highest score.
+
+        Args:
+            similar_chunks: List of (chunk, similarity_score, filename) tuples.
+
+        Returns:
+            List of unique filenames with their highest similarity score.
+        """
+        if not similar_chunks:
+            return []
+
+        # Group by filename and keep highest score
+        file_scores: dict[str, float] = {}
+        for chunk, score, filename in similar_chunks:
+            if filename not in file_scores or score > file_scores[filename]:
+                file_scores[filename] = score
+
+        # Sort by score descending
+        sorted_files = sorted(file_scores.items(), key=lambda x: x[1], reverse=True)
+
+        return [
+            {
+                "filename": filename,
+                "similarity_score": round(score, 4),
+            }
+            for filename, score in sorted_files
+        ]
+
+    def _build_prompt_string(self, messages: list[ChatMessage]) -> str:
+        """Build a readable prompt string from messages for debugging.
+
+        Args:
+            messages: List of chat messages.
+
+        Returns:
+            Formatted prompt string.
+        """
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "unknown") if isinstance(msg, dict) else getattr(msg, "role", "unknown")
+            content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+            parts.append(f"=== {role.upper()} ===\n{content}")
+        return "\n\n".join(parts)

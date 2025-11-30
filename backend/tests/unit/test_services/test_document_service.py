@@ -27,7 +27,7 @@ async def test_document_upload(session: AsyncSession, temp_upload_dir):
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()
@@ -62,7 +62,7 @@ async def test_document_upload_duplicate(session: AsyncSession, temp_upload_dir)
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()
@@ -111,7 +111,7 @@ async def test_document_upload_file_too_large(session: AsyncSession, temp_upload
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()
@@ -137,7 +137,7 @@ async def test_document_process_and_chunk(session: AsyncSession, temp_upload_dir
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()
@@ -174,7 +174,7 @@ async def test_document_delete(session: AsyncSession, temp_upload_dir):
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()
@@ -210,7 +210,7 @@ async def test_document_stats(session: AsyncSession, temp_upload_dir):
     collection = Collection(
         name="Test Collection",
         embedding_model="test-model",
-        embedding_dimension=1536,
+        embedding_dimension=768,
     )
     session.add(collection)
     await session.flush()

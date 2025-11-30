@@ -19,7 +19,8 @@ class AskQuestionRequest(BaseModel):
     """Request for asking a question in a conversation."""
     question: str = Field(..., description="User's question")
     top_k: int = Field(5, description="Number of similar chunks to retrieve")
-    similarity_threshold: float = Field(0.7, description="Minimum similarity score")
+    similarity_threshold: float = Field(0.5, description="Minimum similarity score")
+    llm_provider: str = Field("ollama", description="LLM provider to use: 'ollama' or 'openai'")
 
 
 class CreateCollectionRequest(BaseModel):

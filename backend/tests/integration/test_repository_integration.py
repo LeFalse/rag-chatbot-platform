@@ -327,11 +327,11 @@ class TestChunkRepositoryIntegration:
         repo = ChunkRepository(db_session)
 
         # Create chunks with embeddings
-        # Embedding dimension must match model schema (1536 for OpenAI ada-002)
-        base_embedding = [0.1] * 1536
+        # Embedding dimension must match model schema (768 for nomic-embed-text)
+        base_embedding = [0.1] * 768
 
         chunks_data = [
-            ("Python programming basics", [0.1 + i * 0.01 for _ in range(1536)])
+            ("Python programming basics", [0.1 + i * 0.01 for _ in range(768)])
             for i in range(3)
         ]
 
@@ -345,7 +345,7 @@ class TestChunkRepositoryIntegration:
             await repo.create(chunk)
 
         # Search with similar embedding
-        query_embedding = [0.1] * 1536
+        query_embedding = [0.1] * 768
         results = await repo.search_similar(
             embedding=query_embedding,
             collection_id=collection.id,
@@ -354,10 +354,11 @@ class TestChunkRepositoryIntegration:
         )
 
         assert len(results) > 0
-        # Results should have chunk and similarity score
-        chunk, score = results[0]
+        # Results should have chunk, similarity score, and filename
+        chunk, score, filename = results[0]
         assert chunk.content is not None
         assert 0 <= score <= 1
+        assert filename == "test-doc.txt"
 
     @pytest.mark.asyncio
     async def test_delete_chunks_by_document(

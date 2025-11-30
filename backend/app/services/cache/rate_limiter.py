@@ -2,6 +2,7 @@
 
 import logging
 import time
+import uuid
 from datetime import datetime
 
 from app.services.cache.redis_client import RedisClient
@@ -165,6 +166,7 @@ class RateLimiter:
         local limit = tonumber(ARGV[3])
         local cost = tonumber(ARGV[4])
         local window = tonumber(ARGV[5])
+        local unique_id = ARGV[6]
 
         -- Remove expired entries
         redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
@@ -174,9 +176,9 @@ class RateLimiter:
 
         -- Check if under limit
         if count + cost <= limit then
-            -- Add entries for cost
+            -- Add entries for cost with unique identifier to avoid collisions
             for i = 1, cost do
-                redis.call('ZADD', key, now, now .. ':' .. i)
+                redis.call('ZADD', key, now, unique_id .. ':' .. i)
             end
             -- Set expiry
             redis.call('EXPIRE', key, window + 1)
@@ -187,6 +189,7 @@ class RateLimiter:
         """
 
         client = self.redis.client
+        unique_id = str(uuid.uuid4())
         result = await client.eval(
             lua_script,
             1,
@@ -196,6 +199,7 @@ class RateLimiter:
             str(limit),
             str(cost),
             str(window),
+            unique_id,
         )
 
         allowed = result[0] == 1

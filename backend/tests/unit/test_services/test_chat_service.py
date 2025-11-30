@@ -44,8 +44,8 @@ def mock_embedding_provider():
 def mock_session_cache():
     """Create a mock session cache."""
     cache = AsyncMock(spec=SessionCache)
-    cache.get_messages = AsyncMock(return_value=None)
-    cache.set_messages = AsyncMock()
+    cache.get_messages = AsyncMock(return_value=[])
+    cache.add_message = AsyncMock()
     return cache
 
 
@@ -124,7 +124,7 @@ async def test_answer_question_streaming(
     with patch.object(
         service.chunk_repo,
         "search_similar",
-        return_value=[(chunk, 0.95)],
+        return_value=[(chunk, 0.95, "test.txt")],
     ):
         # Stream answer
         response_chunks = []
@@ -135,8 +135,12 @@ async def test_answer_question_streaming(
         ):
             response_chunks.append(chunk)
 
-    # Verify streaming worked
-    assert response_chunks == ["Hello ", "world!"]
+    # Verify streaming worked (includes LLM response + sources marker)
+    assert response_chunks[0] == "Hello "
+    assert response_chunks[1] == "world!"
+    # Last chunk should be the sources metadata marker
+    assert "[SOURCES]" in response_chunks[-1]
+    assert "test.txt" in response_chunks[-1]
     call_tracker.assert_called_once()
 
     # Verify context was built
@@ -172,10 +176,11 @@ async def test_answer_question_with_cached_messages(
     session.add(conversation)
     await session.flush()
 
-    # Create service with cached messages
-    cached_messages = [
-        ChatMessage(role="user", content="Previous question"),
-        ChatMessage(role="assistant", content="Previous answer"),
+    # Create service with cached messages (MessageData format)
+    from app.services.cache.types import MessageData
+    cached_messages: list[MessageData] = [
+        {"role": "user", "content": "Previous question", "timestamp": "2024-01-01T00:00:00"},
+        {"role": "assistant", "content": "Previous answer", "timestamp": "2024-01-01T00:00:01"},
     ]
     mock_session_cache.get_messages.return_value = cached_messages
 
@@ -320,8 +325,8 @@ async def test_build_context_with_chunks(
         mock_session_cache,
     )
 
-    # Build context
-    similar_chunks = [(chunk1, 0.95), (chunk2, 0.85)]
+    # Build context - now includes filename as third element
+    similar_chunks = [(chunk1, 0.95, "test.txt"), (chunk2, 0.85, "test.txt")]
     context = service._build_context(similar_chunks)
 
     assert "First chunk content" in context

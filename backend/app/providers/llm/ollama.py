@@ -145,10 +145,19 @@ class OllamaProvider(BaseLLMProvider):
                         is_done = data.get("done", False)
 
                         if content or is_done:
+                            # Extract token counts from final chunk
+                            tokens_input = None
+                            tokens_output = None
+                            if is_done:
+                                tokens_input = data.get("prompt_eval_count")
+                                tokens_output = data.get("eval_count")
+
                             yield StreamChunk(
                                 content=content,
                                 is_final=is_done,
                                 finish_reason=data.get("done_reason"),
+                                tokens_input=tokens_input,
+                                tokens_output=tokens_output,
                             )
 
             except httpx.ConnectError as e:
@@ -202,6 +211,9 @@ class OllamaProvider(BaseLLMProvider):
                 "num_predict": max_tokens or self.config.max_tokens,
                 "top_p": self.config.top_p,
                 "stop": self.config.stop_sequences or None,
+                # Performance optimizations (GPU handles larger context efficiently)
+                "num_ctx": 4096,  # Keep default context window for quality
+                "num_batch": 512,  # Batch size for prompt processing
             },
         }
 

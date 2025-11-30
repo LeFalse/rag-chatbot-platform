@@ -115,8 +115,18 @@ class FixedSizeChunking(ChunkingStrategy):
                 )
 
             # Move start position for next chunk (with overlap)
-            start = end - overlap
-            if start < 0:
+            # Ensure we always advance at least by (chunk_size - overlap) to avoid infinite loops
+            min_advance = chunk_size - overlap
+            next_start = end - overlap
+
+            # If we're at the end and got no content or made minimal progress, break
+            if end == len(text):
+                break
+
+            # Ensure we advance at least the minimum amount
+            start = max(next_start, start + min_advance)
+
+            if start >= len(text):
                 break
 
         return chunks
@@ -169,9 +179,15 @@ class SentenceChunking(ChunkingStrategy):
                     )
                 )
 
-            start_idx = end_idx - overlap
-            if start_idx < 0:
+            # If we're at the end, break to avoid infinite loops
+            if end_idx == len(sentences):
                 break
+
+            # Ensure we advance at least by (chunk_size - overlap)
+            min_advance = chunk_size - overlap
+            next_start_idx = end_idx - overlap
+
+            start_idx = max(next_start_idx, start_idx + min_advance)
 
         return chunks
 

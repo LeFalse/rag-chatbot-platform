@@ -4,8 +4,12 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.collection import Collection
+from app.models.document import Document
+from app.models.message import Message
 from app.models.metric import Metric
 from app.repositories.metric_repo import MetricRepository
 
@@ -222,3 +226,149 @@ class MetricsService:
                 for metric_type, latencies in latencies_by_type.items()
             },
         }
+
+    async def get_aggregate_metrics(self) -> dict:
+        """Get aggregate metrics for the dashboard.
+
+        Returns:
+            Dictionary with aggregate statistics.
+        """
+        # Count messages
+        messages_result = await self.session.execute(
+            select(func.count(Message.id))
+        )
+        messages_count = messages_result.scalar() or 0
+
+        # Count documents
+        documents_result = await self.session.execute(
+            select(func.count(Document.id))
+        )
+        documents_count = documents_result.scalar() or 0
+
+        # Count collections
+        collections_result = await self.session.execute(
+            select(func.count(Collection.id))
+        )
+        collections_count = collections_result.scalar() or 0
+
+        # Calculate average response time from messages (assistant messages have latency)
+        latency_result = await self.session.execute(
+            select(func.avg(Message.latency_ms)).where(
+                Message.latency_ms.isnot(None)
+            )
+        )
+        avg_latency = latency_result.scalar()
+        average_response_time_ms = round(avg_latency) if avg_latency else 0
+
+        # Sum token usage from messages
+        tokens_result = await self.session.execute(
+            select(func.sum(Message.tokens_used)).where(
+                Message.tokens_used.isnot(None)
+            )
+        )
+        token_usage = tokens_result.scalar() or 0
+
+        # Sum input tokens
+        tokens_input_result = await self.session.execute(
+            select(func.sum(Message.tokens_input)).where(
+                Message.tokens_input.isnot(None)
+            )
+        )
+        total_tokens_input = tokens_input_result.scalar() or 0
+
+        # Sum output tokens
+        tokens_output_result = await self.session.execute(
+            select(func.sum(Message.tokens_output)).where(
+                Message.tokens_output.isnot(None)
+            )
+        )
+        total_tokens_output = tokens_output_result.scalar() or 0
+
+        return {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "messages_count": messages_count,
+            "documents_count": documents_count,
+            "collections_count": collections_count,
+            "average_response_time_ms": average_response_time_ms,
+            "token_usage": token_usage,
+            "tokens_input": total_tokens_input,
+            "tokens_output": total_tokens_output,
+        }
+
+    async def get_conversations_metrics(self) -> list[dict]:
+        """Get metrics for all conversations.
+
+        Returns:
+            List of conversations with their metrics.
+        """
+        from app.models.conversation import Conversation
+
+        # Get all conversations with aggregated message metrics
+        query = (
+            select(
+                Conversation.id,
+                Conversation.title,
+                Conversation.created_at,
+                func.count(Message.id).label("message_count"),
+                func.sum(Message.tokens_input).label("tokens_input"),
+                func.sum(Message.tokens_output).label("tokens_output"),
+                func.avg(Message.latency_ms).label("avg_latency_ms"),
+            )
+            .outerjoin(Message, Conversation.id == Message.conversation_id)
+            .group_by(Conversation.id)
+            .order_by(Conversation.created_at.desc())
+        )
+
+        result = await self.session.execute(query)
+        rows = result.fetchall()
+
+        return [
+            {
+                "id": str(row.id),
+                "title": row.title,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "message_count": row.message_count or 0,
+                "tokens_input": row.tokens_input or 0,
+                "tokens_output": row.tokens_output or 0,
+                "avg_latency_ms": round(row.avg_latency_ms) if row.avg_latency_ms else 0,
+            }
+            for row in rows
+        ]
+
+    async def get_conversation_messages_metrics(
+        self, conversation_id: UUID
+    ) -> list[dict]:
+        """Get metrics for all messages in a conversation.
+
+        Args:
+            conversation_id: Conversation ID.
+
+        Returns:
+            List of messages with their metrics.
+        """
+        query = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at)
+        )
+
+        result = await self.session.execute(query)
+        messages = result.scalars().all()
+
+        return [
+            {
+                "id": str(msg.id),
+                "role": msg.role,
+                "content": msg.content,
+                "content_preview": msg.content[:100] + "..." if len(msg.content) > 100 else msg.content,
+                "prompt_input": msg.prompt_input,
+                "context_chunks": msg.context_chunks,
+                "tokens_input": msg.tokens_input,
+                "tokens_output": msg.tokens_output,
+                "tokens_used": msg.tokens_used,
+                "latency_ms": msg.latency_ms,
+                "model": msg.model,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            }
+            for msg in messages
+        ]

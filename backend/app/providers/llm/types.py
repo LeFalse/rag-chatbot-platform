@@ -27,8 +27,8 @@ class LLMConfig:
     """Configuration for LLM providers."""
 
     model: str
-    temperature: float = 0.7
-    max_tokens: int = 2048
+    temperature: float = 0.3  # Low temperature for consistent but slightly varied responses
+    max_tokens: int = 512  # Reduced for concise RAG responses
     top_p: float = 1.0
     stop_sequences: list[str] = field(default_factory=list)
 
@@ -40,3 +40,5 @@ class StreamChunk:
     content: str
     is_final: bool = False
     finish_reason: str | None = None
+    tokens_input: int | None = None
+    tokens_output: int | None = None

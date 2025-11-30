@@ -12,7 +12,8 @@ from app.schemas.responses.schemas import ConversationResponse, ConversationHist
 from app.services.chat_service import ChatService
 from app.services.embedding_service import EmbeddingService
 from app.services.cache.embedding_cache import EmbeddingCache
-from app.services.cache.redis_client import RedisClient
+from app.services.cache.session_cache import SessionCache
+from app.services.cache.redis_client import get_redis_client
 from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.message_repo import MessageRepository
 from app.providers.llm.factory import create_llm_provider
@@ -39,6 +40,15 @@ async def create_conversation(
             title=request.title,
         )
         conversation = await repo.create(conversation_obj)
+
+        # Initialize session cache for the new conversation
+        redis_client = await get_redis_client()
+        session_cache = SessionCache(redis_client)
+        await session_cache.create_session(
+            str(conversation.id),
+            str(collection_uuid),
+        )
+
         return ConversationResponse(
             id=str(conversation.id),
             collection_id=str(conversation.collection_id),
@@ -94,15 +104,16 @@ async def get_conversation_history(
     try:
         llm_provider = create_llm_provider()
         embedding_provider = create_embedding_provider()
-        redis_client = RedisClient()
+        redis_client = await get_redis_client()
         embedding_cache = EmbeddingCache(redis_client)
+        session_cache = SessionCache(redis_client)
         embedding_service = EmbeddingService(session, embedding_provider, embedding_cache)
         service = ChatService(
             session,
             llm_provider,
             embedding_provider,
             embedding_service,
-            None,
+            session_cache,
         )
 
         messages_list = await service.get_conversation_history(conv_uuid)
@@ -147,17 +158,26 @@ async def ask_question(
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        llm_provider = create_llm_provider()
+        llm_provider = create_llm_provider(request.llm_provider)
         embedding_provider = create_embedding_provider()
-        redis_client = RedisClient()
+        redis_client = await get_redis_client()
         embedding_cache = EmbeddingCache(redis_client)
+        session_cache = SessionCache(redis_client)
+
+        # Ensure session cache exists for this conversation
+        if not await session_cache.session_exists(conversation_id):
+            await session_cache.create_session(
+                conversation_id,
+                str(conversation.collection_id),
+            )
+
         embedding_service = EmbeddingService(session, embedding_provider, embedding_cache)
         service = ChatService(
             session,
             llm_provider,
             embedding_provider,
             embedding_service,
-            None,
+            session_cache,
         )
 
         async def generate():

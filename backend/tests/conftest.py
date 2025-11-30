@@ -8,7 +8,11 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import get_settings
 from app.db.base import Base
@@ -24,54 +28,59 @@ from app.models.metric import Metric
 settings = get_settings()
 
 
-@pytest.fixture(autouse=True, scope="function")
-def reset_db_isolation():
-    """Reset DB isolation for each test."""
-    yield
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def engine():
-    """Create a single engine for all tests to avoid memory issues."""
+    """Create engine for each test function to avoid event loop issues."""
     test_engine = create_async_engine(
         settings.database_url,
         echo=False,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=2,
+        max_overflow=5,
         pool_pre_ping=True,
     )
     yield test_engine
     await test_engine.dispose()
 
 
+class TestSession(AsyncSession):
+    """Session wrapper that converts commits to flushes for test isolation."""
+
+    async def commit(self) -> None:
+        """Convert commit to flush to prevent actual database commits."""
+        await self.flush()
+
+
 @pytest_asyncio.fixture(scope="function")
 async def session(engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create async session for testing, reusing the same engine."""
-    async_session_maker = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=True,
-    )
+    """Create a session that auto-rollbacks after each test.
 
-    test_session = await async_session_maker().__aenter__()
-    try:
-        yield test_session
-    finally:
-        # Ensure proper cleanup of the session
+    Uses a transaction that is never committed, ensuring test isolation.
+    Commits are converted to flushes to prevent data persistence.
+    """
+    # Start a connection with a transaction
+    async with engine.connect() as connection:
+        # Begin a non-ORM transaction
+        trans = await connection.begin()
+
+        # Create test session that prevents commits
+        async_session = TestSession(
+            bind=connection,
+            expire_on_commit=False,
+        )
+
         try:
-            await test_session.rollback()
-        except Exception:
-            pass
-        try:
-            await test_session.close()
-        except Exception:
-            pass
-        # Dispose of the connection back to the pool
-        await engine.dispose()
+            yield async_session
+        finally:
+            # Always rollback - this discards all changes
+            await async_session.close()
+            await trans.rollback()
 
 
 # Keep async_session as alias for backward compatibility
-async_session = session
+@pytest_asyncio.fixture(scope="function")
+async def async_session(session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
+    """Alias for session fixture for backward compatibility."""
+    yield session
 
 
 @pytest.fixture
@@ -128,49 +137,43 @@ def sample_message_data() -> dict:
 
 @pytest_asyncio.fixture
 async def collection(
-    async_session: AsyncSession,
+    session: AsyncSession,
     sample_collection_data: dict,
-) -> AsyncGenerator[Collection, None]:
-    """Create a test collection."""
+) -> Collection:
+    """Create a test collection (auto-rolled back after test)."""
     coll = Collection(**sample_collection_data)
-    async_session.add(coll)
-    await async_session.flush()
-    yield coll
-    await async_session.delete(coll)
-    await async_session.flush()
+    session.add(coll)
+    await session.flush()
+    return coll
 
 
 @pytest_asyncio.fixture
 async def document(
-    async_session: AsyncSession,
+    session: AsyncSession,
     collection: Collection,
     sample_document_data: dict,
-) -> AsyncGenerator[Document, None]:
-    """Create a test document."""
+) -> Document:
+    """Create a test document (auto-rolled back after test)."""
     doc = Document(collection_id=collection.id, **sample_document_data)
-    async_session.add(doc)
-    await async_session.flush()
-    yield doc
-    await async_session.delete(doc)
-    await async_session.flush()
+    session.add(doc)
+    await session.flush()
+    return doc
 
 
 @pytest_asyncio.fixture
 async def conversation(
-    async_session: AsyncSession,
+    session: AsyncSession,
     collection: Collection,
     sample_conversation_data: dict,
-) -> AsyncGenerator[Conversation, None]:
-    """Create a test conversation."""
+) -> Conversation:
+    """Create a test conversation (auto-rolled back after test)."""
     conv = Conversation(
         collection_id=collection.id,
         **sample_conversation_data,
     )
-    async_session.add(conv)
-    await async_session.flush()
-    yield conv
-    await async_session.delete(conv)
-    await async_session.flush()
+    session.add(conv)
+    await session.flush()
+    return conv
 
 
 @pytest.fixture

@@ -73,6 +73,10 @@ services:
           memory: 16G
         reservations:
           memory: 12G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - rag-network
 

@@ -1,6 +1,5 @@
 """Embedding service - generates embeddings with caching."""
 
-import hashlib
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,17 +43,16 @@ class EmbeddingService:
             ValueError: If embedding generation fails.
         """
         # Check cache first
-        cache_key = self._make_cache_key(text)
-        cached = await self.cache.get(cache_key)
+        cached = await self.cache.get_embedding(text, self.provider.provider_name)
         if cached:
-            return cached
+            return cached.embedding
 
         # Generate embedding
         result = await self.provider.embed(text)
         embedding = result.embedding
 
         # Store in cache
-        await self.cache.set(cache_key, embedding)
+        await self.cache.set_embedding(text, embedding, self.provider.provider_name)
 
         return embedding
 
@@ -72,14 +70,14 @@ class EmbeddingService:
         """
         embeddings: list[list[float]] = []
         texts_to_embed: list[int] = []
-        cache_keys = [self._make_cache_key(text) for text in texts]
+        model = self.provider.provider_name
 
         # Check cache for all texts
-        cached_embeddings = await self.cache.get_batch(cache_keys)
+        cached_embeddings, misses = await self.cache.get_batch(texts, model)
 
         for i, cached in enumerate(cached_embeddings):
             if cached:
-                embeddings.append(cached)
+                embeddings.append(cached.embedding)
             else:
                 embeddings.append([])  # Placeholder
                 texts_to_embed.append(i)
@@ -93,7 +91,7 @@ class EmbeddingService:
             for i, idx in enumerate(texts_to_embed):
                 embedding = result.embeddings[i]
                 embeddings[idx] = embedding
-                await self.cache.set(cache_keys[idx], embedding)
+                await self.cache.set_embedding(texts[idx], embedding, model)
 
         return embeddings
 
@@ -141,16 +139,3 @@ class EmbeddingService:
             Dictionary with cache hit rate and other stats.
         """
         return await self.cache.get_stats()
-
-    def _make_cache_key(self, text: str) -> str:
-        """Generate cache key for text.
-
-        Args:
-            text: Text to generate key for.
-
-        Returns:
-            Cache key.
-        """
-        text_hash = hashlib.md5(text.encode()).hexdigest()
-        provider_name = self.provider.provider_name
-        return f"emb:{provider_name}:{text_hash}"

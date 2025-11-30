@@ -38,17 +38,17 @@ class ChunkRepository(BaseRepository[Chunk]):
         collection_id: UUID,
         limit: int = 5,
         threshold: float = 0.7,
-    ) -> Sequence[tuple[Chunk, float]]:
+    ) -> Sequence[tuple[Chunk, float, str]]:
         """Search for similar chunks using vector similarity.
 
         Uses cosine distance (lower is better, 0 = identical).
-        Returns chunks with similarity score (1 - distance).
+        Returns chunks with similarity score (1 - distance) and document filename.
         """
         # pgvector cosine distance operator: <=>
-        # We join through documents to filter by collection
+        # We join through documents to filter by collection and get filename
         query = text(
             """
-            SELECT c.*, 1 - (c.embedding <=> :embedding) as similarity
+            SELECT c.*, d.filename as doc_filename, 1 - (c.embedding <=> :embedding) as similarity
             FROM chunks c
             JOIN documents d ON c.document_id = d.id
             WHERE d.collection_id = :collection_id
@@ -81,7 +81,7 @@ class ChunkRepository(BaseRepository[Chunk]):
                 metadata_=row.metadata,
                 created_at=row.created_at,
             )
-            chunks_with_scores.append((chunk, row.similarity))
+            chunks_with_scores.append((chunk, row.similarity, row.doc_filename))
 
         return chunks_with_scores
 

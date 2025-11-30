@@ -10,6 +10,8 @@ class DocumentResponse(BaseModel):
     filename: str = Field(..., description="Document filename")
     collection_id: str = Field(..., description="Collection ID")
     chunk_count: int = Field(..., description="Number of chunks")
+    status: str = Field("pending", description="Processing status: pending, processing, completed, failed")
+    error: str | None = Field(None, description="Error message if processing failed")
     created_at: datetime = Field(..., description="Creation timestamp")
 
     class Config:

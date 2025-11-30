@@ -33,6 +33,23 @@ class DocumentRepository(BaseRepository[Document]):
         )
         return result.scalars().all()
 
+    async def get_by_collection_with_chunks(
+        self,
+        collection_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Document]:
+        """Get all documents in a collection with chunks loaded."""
+        result = await self.session.execute(
+            select(Document)
+            .where(Document.collection_id == collection_id)
+            .options(selectinload(Document.chunks))
+            .offset(skip)
+            .limit(limit)
+            .order_by(Document.created_at.desc())
+        )
+        return result.scalars().all()
+
     async def get_with_chunks(self, document_id: UUID) -> Document | None:
         """Get document with its chunks loaded."""
         result = await self.session.execute(

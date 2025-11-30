@@ -36,7 +36,7 @@ class Chunk(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(1536),  # OpenAI ada-002 dimension, can be changed
+        Vector(768),  # nomic-embed-text dimension
         nullable=True,
     )
     metadata_: Mapped[ChunkMetadata] = mapped_column(
