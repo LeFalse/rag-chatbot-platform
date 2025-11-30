@@ -98,21 +98,47 @@ rag-chatbot-platform/
 - **Document Management**: Upload, list, delete documents
 - **Metrics Dashboard**: Usage, costs, cache hit rate
 
-## Development Roadmap
+## Progress
 
-- [x] Project structure setup
-- [x] Docker Compose configuration
-- [x] FastAPI backend with health check
-- [x] React frontend setup
-- [x] Database models and migrations
-- [x] LLM provider abstraction
-- [x] Embedding provider abstraction
-- [x] Cache layer (Redis)
-- [x] Document processing service
-- [x] Chat service with RAG
-- [ ] API routes
-- [ ] Frontend components
-- [ ] CI/CD pipeline
+### Done ✅
+- Project structure and Docker Compose (with GPU support)
+- FastAPI backend + React frontend
+- Database models and migrations
+- LLM/Embedding provider abstraction (Ollama tested)
+- Cache layer (Redis: embeddings, sessions, rate limiting)
+- Document processing and Chat service with RAG streaming
+- API routes (documents, chat, metrics)
+- Frontend pages (Chat, Documents, Dashboard)
+- Token tracking, source attribution, metrics visualization
+
+### Backlog
+- Fix message details display (input vs output bug)
+- Collection-specific system prompts (agent personality/restrictions)
+- Agent configuration UI per collection
+- Prompt templates with variables
+
+### Ideas for Future
+**RAG Improvements**
+- Hybrid search (semantic + keyword)
+- Chunk overlap configuration
+- Re-ranking strategies
+- Multi-collection queries
+
+**Safety & Control**
+- Input/output guardrails
+- Topic restrictions, PII detection
+- Audit logging
+
+**Tools & Integrations**
+- Tool/function calling
+- Web search, calculator
+- Custom tools per collection
+- Webhooks
+
+**Production**
+- Authentication & multi-tenancy
+- CI/CD pipeline
+- Monitoring & alerting
 
 ## License
 
