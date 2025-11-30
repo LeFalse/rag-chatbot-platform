@@ -112,7 +112,6 @@ rag-chatbot-platform/
 - Token tracking, source attribution, metrics visualization
 
 ### Backlog
-- Fix message details display (input vs output bug)
 - Collection-specific system prompts (agent personality/restrictions)
 - Agent configuration UI per collection
 - Prompt templates with variables
