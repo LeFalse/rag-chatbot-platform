@@ -375,7 +375,6 @@
 .expandable-section {
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
-  overflow: hidden;
 }
 
 .expandable-header {
@@ -419,6 +418,7 @@
   border-radius: 0;
   border-top: 1px solid #e5e7eb;
   max-height: 500px;
+  overflow-y: auto;
 }
 
 /* Hide default details marker */

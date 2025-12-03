@@ -85,6 +85,46 @@ async def list_collections(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/collections/{collection_id}")
+async def delete_collection(
+    collection_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete a collection and all its documents."""
+    try:
+        collection_uuid = UUID(collection_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid collection ID format")
+
+    try:
+        collection_repo = CollectionRepository(session)
+        collection = await collection_repo.get_by_id(collection_uuid)
+        if not collection:
+            return {"message": "Collection deleted successfully"}  # Idempotent
+
+        # Delete all documents (this will delete files too)
+        service = DocumentService(session)
+        doc_repo = DocumentRepository(session)
+        docs = await doc_repo.get_by_collection(collection_uuid)
+        for doc in docs:
+            await service.delete_document(doc.id)
+
+        # Delete collection
+        await collection_repo.delete(collection_uuid)
+
+        # Delete collection folder from uploads
+        import asyncio
+        from pathlib import Path
+        folder_path = Path("uploads") / str(collection_uuid)
+        if await asyncio.to_thread(folder_path.exists):
+            import shutil
+            await asyncio.to_thread(shutil.rmtree, folder_path)
+
+        return {"message": "Collection deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{collection_id}/upload")
 async def upload_document(
     collection_id: str,

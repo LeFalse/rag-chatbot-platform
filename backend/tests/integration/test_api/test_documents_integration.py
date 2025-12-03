@@ -166,3 +166,50 @@ class TestDocumentsEndpoints:
         response = await api_client.delete(f"/documents/{fake_id}")
 
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_delete_collection(self, api_client: AsyncClient):
+        """Test deleting a collection and all its documents."""
+        # Create a collection
+        create_response = await api_client.post(
+            "/documents/collections",
+            json={
+                "name": "test-for-collection-delete",
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimension": 768,
+            },
+        )
+        assert create_response.status_code == 200
+        collection_id = create_response.json()["id"]
+
+        # Upload a document
+        file_content = b"Test document in collection to be deleted"
+        files = {"file": ("collection_delete_test.txt", BytesIO(file_content), "text/plain")}
+        upload_response = await api_client.post(
+            f"/documents/{collection_id}/upload",
+            files=files,
+        )
+        assert upload_response.status_code == 200
+
+        # Delete the collection
+        delete_response = await api_client.delete(f"/documents/collections/{collection_id}")
+        assert delete_response.status_code == 200
+        data = delete_response.json()
+        assert data["message"] == "Collection deleted successfully"
+
+        # Verify collection is gone (should return empty list or not contain this collection)
+        list_response = await api_client.get("/documents/collections")
+        assert list_response.status_code == 200
+        collection_ids = [c["id"] for c in list_response.json()]
+        assert collection_id not in collection_ids
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_collection(self, api_client: AsyncClient):
+        """Test deleting a non-existent collection is idempotent (returns 200)."""
+        fake_id = uuid4()
+
+        response = await api_client.delete(f"/documents/collections/{fake_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Collection deleted successfully"

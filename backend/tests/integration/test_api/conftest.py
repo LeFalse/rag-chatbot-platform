@@ -1,16 +1,23 @@
 """Configuration and fixtures for API integration tests."""
 
+import shutil
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.main import app
 from app.models.collection import Collection
+from app.models.document import Document
+from app.models.chunk import Chunk
 from app.services.cache.redis_client import RedisClient
+
+UPLOAD_DIR = Path("uploads")
 
 
 @pytest_asyncio.fixture
@@ -33,6 +40,10 @@ async def mock_redis_client() -> AsyncMock:
 @pytest_asyncio.fixture
 async def api_client(session: AsyncSession, mock_redis_client: AsyncMock) -> AsyncClient:
     """Create async test client for API tests."""
+    # Track collections before test to cleanup upload folders after
+    result = await session.execute(select(Collection.id))
+    existing_collection_ids = {row[0] for row in result.fetchall()}
+
     async def override_get_session():
         yield session
 
@@ -57,6 +68,17 @@ async def api_client(session: AsyncSession, mock_redis_client: AsyncMock) -> Asy
             yield client
 
     app.dependency_overrides.clear()
+
+    # Cleanup: Delete upload folders created during test
+    # (DB records are rolled back automatically by session fixture)
+    result = await session.execute(select(Collection.id))
+    all_collection_ids = {row[0] for row in result.fetchall()}
+    new_collection_ids = all_collection_ids - existing_collection_ids
+
+    for collection_id in new_collection_ids:
+        folder_path = UPLOAD_DIR / str(collection_id)
+        if folder_path.exists():
+            shutil.rmtree(folder_path)
 
 
 @pytest_asyncio.fixture
