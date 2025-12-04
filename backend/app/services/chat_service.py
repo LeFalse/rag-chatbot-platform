@@ -21,7 +21,14 @@ from app.services.embedding_service import EmbeddingService
 class ChatService:
     """Service for chat with RAG (Retrieval-Augmented Generation)."""
 
-    SYSTEM_PROMPT = """You are a precise assistant that answers questions based ONLY on the provided documents.
+    # Personality presets for different assistant behaviors
+    PERSONALITY_PROMPTS = {
+        "professional": "You are a professional assistant. Be formal, concise, and accurate.",
+        "friendly": "You are a friendly assistant. Be conversational, helpful, and approachable.",
+        "technical": "You are a technical assistant. Be detailed, precise, and use technical terminology when appropriate.",
+    }
+
+    DEFAULT_SYSTEM_PROMPT = """You are a precise assistant that answers questions based ONLY on the provided documents.
 
 Critical Instructions:
 - Read the context CAREFULLY before answering
@@ -32,8 +39,71 @@ Critical Instructions:
 - Do NOT mention document names, filenames, or sources in your response - sources are shown separately
 - Do NOT mention relevance percentages, similarity scores, or technical metadata
 - Do NOT invent information not present in the context
-- Be direct and concise - just answer the question
-- Respond in the same language as the user's question"""
+- Be direct and concise - just answer the question"""
+
+    def _get_system_prompt(
+        self,
+        system_prompt: str | None = None,
+        personality: str | None = None,
+    ) -> tuple[str, str | None]:
+        """Get the system prompt based on configuration.
+
+        The final prompt is built by combining:
+        1. Personality intro (if provided)
+        2. Default RAG instructions (always included)
+
+        Custom system prompt is returned separately to be placed AFTER
+        the context for maximum priority.
+
+        Args:
+            system_prompt: Custom instructions to add after context.
+            personality: Personality preset name.
+
+        Returns:
+            Tuple of (base_prompt, custom_instructions).
+        """
+        parts = []
+
+        # Add personality intro if provided
+        if personality and personality in self.PERSONALITY_PROMPTS:
+            parts.append(self.PERSONALITY_PROMPTS[personality])
+
+        # Default RAG instructions
+        parts.append(self.DEFAULT_SYSTEM_PROMPT)
+
+        return "\n\n".join(parts), system_prompt
+
+    # Language keywords mapping for auto-detection
+    LANGUAGE_PREFIXES: dict[tuple[str, ...], str] = {
+        ("espanhol", "spanish"): "[Respond in Spanish] ",
+        ("inglês", "english"): "[Respond in English] ",
+        ("francês", "french"): "[Respond in French] ",
+        ("alemão", "german"): "[Respond in German] ",
+        ("italiano", "italian"): "[Respond in Italian] ",
+        ("japonês", "japanese"): "[Respond in Japanese] ",
+        ("chinês", "chinese"): "[Respond in Chinese] ",
+    }
+
+    def _detect_language_prefix(self, custom_instructions: str | None) -> str:
+        """Detect language instruction and return appropriate prefix.
+
+        This helps enforce language instructions for models that might
+        otherwise ignore system prompt language directives.
+
+        Args:
+            custom_instructions: The custom system prompt to analyze.
+
+        Returns:
+            A prefix string like "[Respond in Spanish] " or empty string.
+        """
+        if not custom_instructions:
+            return ""
+
+        custom_lower = custom_instructions.lower()
+        for keywords, prefix in self.LANGUAGE_PREFIXES.items():
+            if any(kw in custom_lower for kw in keywords):
+                return prefix
+        return ""
 
     def __init__(
         self,
@@ -68,6 +138,11 @@ Critical Instructions:
         question: str,
         top_k: int = 5,
         similarity_threshold: float = 0.7,
+        system_prompt: str | None = None,
+        personality: str | None = None,
+        temperature: float = 0.5,
+        max_tokens: int = 512,
+        collection_name: str | None = None,
     ) -> AsyncIterator[str]:
         """Answer a question using RAG with streaming response.
 
@@ -77,6 +152,11 @@ Critical Instructions:
             question: User's question.
             top_k: Number of chunks to retrieve.
             similarity_threshold: Minimum similarity score.
+            system_prompt: Custom system prompt override.
+            personality: Personality preset (professional, friendly, technical).
+            temperature: LLM temperature setting.
+            max_tokens: Maximum tokens for response.
+            collection_name: Name of the collection for logging.
 
         Yields:
             Streaming response chunks.
@@ -84,6 +164,15 @@ Critical Instructions:
         Raises:
             ValueError: If conversation or collection not found.
         """
+        # Build agent config to save with the message
+        agent_config = {
+            "collection_name": collection_name,
+            "personality": personality or "professional",
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_k": top_k,
+            "system_prompt": system_prompt,
+        }
         # Get conversation (verify it exists)
         conversation = await self.conv_repo.get_with_messages(conversation_id)
         if not conversation:
@@ -120,11 +209,18 @@ Critical Instructions:
         context = self._build_context(similar_chunks)
         context_chunks_data = self._build_context_metadata(similar_chunks)
 
-        # Add user message to history
-        user_message = ChatMessage(role="user", content=question)
+        # Get the appropriate system prompt based on configuration
+        base_prompt, custom_instructions = self._get_system_prompt(system_prompt, personality)
+
+        # Detect language instruction and create prefix for user message
+        lang_prefix = self._detect_language_prefix(custom_instructions)
+
+        # Add user message to history (with lang prefix for LLM only)
+        question_for_llm = f"{lang_prefix}{question}" if lang_prefix else question
+        user_message = ChatMessage(role="user", content=question_for_llm)
         messages.append(user_message)
 
-        # Save user message to DB
+        # Save user message to DB (original question without prefix)
         user_db_message = Message(
             conversation_id=conversation_id,
             role="user",
@@ -133,13 +229,18 @@ Critical Instructions:
         self.session.add(user_db_message)
         await self.session.flush()
 
-        # Add user message to cache if available
+        # Add user message to cache if available (original question)
         if self.session_cache:
             await self.session_cache.add_message(
                 str(conversation_id),
                 "user",
                 question,
             )
+
+        # Build full system content
+        system_content = f"{base_prompt}\n\nContext:\n{context}"
+        if custom_instructions:
+            system_content += f"\n\n=== ADDITIONAL INSTRUCTIONS ===\n{custom_instructions}"
 
         # Add system message with context if not already there
         has_system = any(
@@ -151,14 +252,14 @@ Critical Instructions:
         if not has_system:
             system_message = ChatMessage(
                 role="system",
-                content=f"{self.SYSTEM_PROMPT}\n\nContext:\n{context}",
+                content=system_content,
             )
             messages.insert(0, system_message)
         else:
             # Update system message with new context
             messages[0] = ChatMessage(
                 role="system",
-                content=f"{self.SYSTEM_PROMPT}\n\nContext:\n{context}",
+                content=system_content,
             )
 
         # Build full prompt string for debugging
@@ -196,6 +297,7 @@ Critical Instructions:
             content=response_content,
             prompt_input=full_prompt,
             context_chunks=context_chunks_data,
+            agent_config=agent_config,
             latency_ms=latency_ms,
             model=self.llm_provider.provider_name,
             tokens_input=tokens_input,

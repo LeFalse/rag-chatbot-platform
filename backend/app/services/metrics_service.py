@@ -344,12 +344,21 @@ class MetricsService:
             conversation_id: Conversation ID.
 
         Returns:
-            List of messages with their metrics.
+            List of messages with their metrics and agent config.
         """
+        from sqlalchemy import case
+
+        # Get messages, ordering by created_at and then by role
+        # (user messages should appear before assistant messages when timestamps are equal)
+        role_order = case(
+            (Message.role == "user", 1),
+            (Message.role == "assistant", 2),
+            else_=3
+        )
         query = (
             select(Message)
             .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)
+            .order_by(Message.created_at, role_order)
         )
 
         result = await self.session.execute(query)
@@ -369,6 +378,8 @@ class MetricsService:
                 "latency_ms": msg.latency_ms,
                 "model": msg.model,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                # Use the agent_config stored with the message at generation time
+                "collection_config": msg.agent_config if msg.role == "assistant" else None,
             }
             for msg in messages
         ]

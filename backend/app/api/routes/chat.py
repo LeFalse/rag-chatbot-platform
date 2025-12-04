@@ -16,6 +16,7 @@ from app.services.cache.session_cache import SessionCache
 from app.services.cache.redis_client import get_redis_client
 from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.message_repo import MessageRepository
+from app.repositories.collection_repo import CollectionRepository
 from app.providers.llm.factory import create_llm_provider
 from app.providers.embedding.factory import create_embedding_provider
 
@@ -158,7 +159,18 @@ async def ask_question(
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        llm_provider = create_llm_provider(request.llm_provider)
+        # Get collection to use its agent configuration
+        collection_repo = CollectionRepository(session)
+        collection = await collection_repo.get_by_id(conversation.collection_id)
+        if not collection:
+            raise HTTPException(status_code=404, detail="Collection not found")
+
+        # Create LLM provider with collection's temperature and max_tokens settings
+        llm_provider = create_llm_provider(
+            request.llm_provider,
+            temperature=collection.temperature,
+            max_tokens=collection.max_tokens,
+        )
         embedding_provider = create_embedding_provider()
         redis_client = await get_redis_client()
         embedding_cache = EmbeddingCache(redis_client)
@@ -180,6 +192,9 @@ async def ask_question(
             session_cache,
         )
 
+        # Use collection's top_k if not overridden in request (default is 5)
+        effective_top_k = collection.top_k if request.top_k == 5 else request.top_k
+
         async def generate():
             """Generate streaming responses."""
             try:
@@ -187,8 +202,13 @@ async def ask_question(
                     conv_uuid,
                     conversation.collection_id,
                     request.question,
-                    top_k=request.top_k,
+                    top_k=effective_top_k,
                     similarity_threshold=request.similarity_threshold,
+                    system_prompt=collection.system_prompt,
+                    personality=collection.personality,
+                    temperature=collection.temperature,
+                    max_tokens=collection.max_tokens,
+                    collection_name=collection.name,
                 ):
                     yield chunk
             except Exception as e:

@@ -28,13 +28,32 @@ export interface Document {
   created_at: string
 }
 
+export type PersonalityType = 'professional' | 'friendly' | 'technical' | 'custom'
+
 export interface Collection {
   id: string
   name: string
+  description?: string
   embedding_model: string
   embedding_dimension: number
   document_count: number
+  // Agent configuration
+  system_prompt?: string
+  personality?: PersonalityType
+  temperature: number
+  max_tokens: number
+  top_k: number
   created_at: string
+}
+
+export interface UpdateCollectionRequest {
+  name?: string
+  description?: string
+  system_prompt?: string
+  personality?: PersonalityType
+  temperature?: number
+  max_tokens?: number
+  top_k?: number
 }
 
 export interface MetricsData {
@@ -64,6 +83,15 @@ export interface ContextChunk {
   content_preview: string
 }
 
+export interface CollectionConfig {
+  collection_name: string
+  personality: PersonalityType
+  temperature: number
+  max_tokens: number
+  top_k: number
+  system_prompt: string | null
+}
+
 export interface MessageMetrics {
   id: string
   role: string
@@ -77,6 +105,7 @@ export interface MessageMetrics {
   latency_ms: number | null
   model: string | null
   created_at: string | null
+  collection_config: CollectionConfig | null
 }
 
 export interface ConversationHistory {

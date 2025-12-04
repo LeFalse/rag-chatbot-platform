@@ -27,7 +27,7 @@ class LLMConfig:
     """Configuration for LLM providers."""
 
     model: str
-    temperature: float = 0.3  # Low temperature for consistent but slightly varied responses
+    temperature: float = 0.5  # Balanced temperature for natural varied responses
     max_tokens: int = 512  # Reduced for concise RAG responses
     top_p: float = 1.0
     stop_sequences: list[str] = field(default_factory=list)

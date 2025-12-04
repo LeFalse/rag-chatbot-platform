@@ -64,9 +64,16 @@ class CollectionResponse(BaseModel):
     """Response for a collection."""
     id: str = Field(..., description="Collection ID")
     name: str = Field(..., description="Collection name")
+    description: str | None = Field(None, description="Collection description")
     embedding_model: str = Field(..., description="Embedding model")
     embedding_dimension: int = Field(..., description="Embedding dimension")
     document_count: int = Field(0, description="Number of documents")
+    # Agent configuration
+    system_prompt: str | None = Field(None, description="Custom system prompt")
+    personality: str | None = Field("professional", description="Personality preset")
+    temperature: float = Field(0.5, description="LLM temperature")
+    max_tokens: int = Field(512, description="Max response tokens")
+    top_k: int = Field(5, description="Number of chunks to retrieve")
     created_at: datetime = Field(..., description="Creation timestamp")
 
     class Config:

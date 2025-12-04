@@ -3,7 +3,7 @@
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.message import Message
@@ -16,6 +16,15 @@ class MessageRepository(BaseRepository[Message]):
     def __init__(self, session: AsyncSession):
         super().__init__(Message, session)
 
+    def _role_order(self):
+        """Get role ordering expression (user=1, assistant=2, system=0)."""
+        return case(
+            (Message.role == "system", 0),
+            (Message.role == "user", 1),
+            (Message.role == "assistant", 2),
+            else_=3
+        )
+
     async def get_by_conversation(
         self,
         conversation_id: UUID,
@@ -26,7 +35,7 @@ class MessageRepository(BaseRepository[Message]):
         result = await self.session.execute(
             select(Message)
             .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at.asc())
+            .order_by(Message.created_at.asc(), self._role_order())
             .offset(skip)
             .limit(limit)
         )
@@ -41,7 +50,7 @@ class MessageRepository(BaseRepository[Message]):
         result = await self.session.execute(
             select(Message)
             .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at.desc())
+            .order_by(Message.created_at.desc(), self._role_order().desc())
             .limit(limit)
         )
         # Reverse to get chronological order

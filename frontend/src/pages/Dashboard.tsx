@@ -338,6 +338,43 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
 
+              {/* Collection Config - Only for assistant messages */}
+              {selectedMessage.role === 'assistant' && selectedMessage.collection_config && (
+                <div className="collection-config-section">
+                  <h4 className="config-section-title">Agent Configuration</h4>
+                  <div className="config-grid">
+                    <div className="config-item">
+                      <span className="config-label">Collection</span>
+                      <span className="config-value">{selectedMessage.collection_config.collection_name}</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Personality</span>
+                      <span className={`config-value personality-badge ${selectedMessage.collection_config.personality}`}>
+                        {selectedMessage.collection_config.personality}
+                      </span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Temperature</span>
+                      <span className="config-value">{selectedMessage.collection_config.temperature}</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Max Tokens</span>
+                      <span className="config-value">{selectedMessage.collection_config.max_tokens}</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Top K</span>
+                      <span className="config-value">{selectedMessage.collection_config.top_k}</span>
+                    </div>
+                    {selectedMessage.collection_config.system_prompt && (
+                      <div className="config-item full-width">
+                        <span className="config-label">Custom Prompt</span>
+                        <span className="config-value custom-prompt">{selectedMessage.collection_config.system_prompt}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Retrieved Context - Only for assistant messages */}
               {selectedMessage.role === 'assistant' && selectedMessage.context_chunks && selectedMessage.context_chunks.length > 0 && (
                 <div className="context-chunks-simple">

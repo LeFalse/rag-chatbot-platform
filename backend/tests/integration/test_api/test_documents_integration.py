@@ -213,3 +213,126 @@ class TestDocumentsEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Collection deleted successfully"
+
+    @pytest.mark.asyncio
+    async def test_update_collection_config(self, api_client: AsyncClient):
+        """Test updating a collection's agent configuration."""
+        # Create a collection first
+        create_response = await api_client.post(
+            "/documents/collections",
+            json={
+                "name": "test-collection-config",
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimension": 768,
+            },
+        )
+        assert create_response.status_code == 200
+        collection_id = create_response.json()["id"]
+
+        # Verify default values
+        data = create_response.json()
+        assert data["personality"] == "professional"
+        assert data["temperature"] == 0.5
+        assert data["max_tokens"] == 512
+        assert data["top_k"] == 5
+        assert data["system_prompt"] is None
+
+        # Update collection config
+        update_response = await api_client.put(
+            f"/documents/collections/{collection_id}",
+            json={
+                "name": "updated-collection-name",
+                "description": "A test collection with custom config",
+                "personality": "friendly",
+                "temperature": 0.7,
+                "max_tokens": 1024,
+                "top_k": 10,
+            },
+        )
+        assert update_response.status_code == 200
+        updated_data = update_response.json()
+
+        # Verify updates
+        assert updated_data["name"] == "updated-collection-name"
+        assert updated_data["description"] == "A test collection with custom config"
+        assert updated_data["personality"] == "friendly"
+        assert updated_data["temperature"] == 0.7
+        assert updated_data["max_tokens"] == 1024
+        assert updated_data["top_k"] == 10
+
+    @pytest.mark.asyncio
+    async def test_update_collection_with_custom_prompt(self, api_client: AsyncClient):
+        """Test updating a collection with a custom system prompt."""
+        # Create a collection first
+        create_response = await api_client.post(
+            "/documents/collections",
+            json={
+                "name": "test-custom-prompt",
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimension": 768,
+            },
+        )
+        assert create_response.status_code == 200
+        collection_id = create_response.json()["id"]
+
+        custom_prompt = "You are a helpful assistant specialized in Python programming."
+
+        # Update with custom prompt
+        update_response = await api_client.put(
+            f"/documents/collections/{collection_id}",
+            json={
+                "personality": "custom",
+                "system_prompt": custom_prompt,
+            },
+        )
+        assert update_response.status_code == 200
+        data = update_response.json()
+
+        assert data["personality"] == "custom"
+        assert data["system_prompt"] == custom_prompt
+
+    @pytest.mark.asyncio
+    async def test_update_nonexistent_collection(self, api_client: AsyncClient):
+        """Test updating a non-existent collection returns 404."""
+        fake_id = uuid4()
+
+        response = await api_client.put(
+            f"/documents/collections/{fake_id}",
+            json={"name": "new-name"},
+        )
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_collection_config_persists_after_listing(self, api_client: AsyncClient):
+        """Test that collection config is returned in list endpoint."""
+        # Create a collection with custom config
+        create_response = await api_client.post(
+            "/documents/collections",
+            json={
+                "name": "test-config-in-list",
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimension": 768,
+            },
+        )
+        assert create_response.status_code == 200
+        collection_id = create_response.json()["id"]
+
+        # Update config
+        await api_client.put(
+            f"/documents/collections/{collection_id}",
+            json={
+                "personality": "technical",
+                "temperature": 0.3,
+            },
+        )
+
+        # List collections and verify config is included
+        list_response = await api_client.get("/documents/collections")
+        assert list_response.status_code == 200
+
+        collections = list_response.json()
+        our_collection = next(c for c in collections if c["id"] == collection_id)
+
+        assert our_collection["personality"] == "technical"
+        assert our_collection["temperature"] == 0.3

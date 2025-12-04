@@ -28,3 +28,16 @@ class CreateCollectionRequest(BaseModel):
     name: str = Field(..., description="Collection name")
     embedding_model: str = Field(..., description="Embedding model name")
     embedding_dimension: int = Field(..., description="Embedding dimension")
+
+
+class UpdateCollectionRequest(BaseModel):
+    """Request for updating a collection's configuration."""
+    name: str | None = Field(None, description="Collection name")
+    description: str | None = Field(None, description="Collection description")
+    system_prompt: str | None = Field(None, description="Custom system prompt")
+    personality: str | None = Field(
+        None, description="Personality preset: professional, friendly, technical, custom"
+    )
+    temperature: float | None = Field(None, ge=0.0, le=2.0, description="LLM temperature")
+    max_tokens: int | None = Field(None, ge=1, le=4096, description="Max response tokens")
+    top_k: int | None = Field(None, ge=1, le=20, description="Number of chunks to retrieve")

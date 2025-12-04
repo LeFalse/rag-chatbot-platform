@@ -38,6 +38,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_input: Mapped[str | None] = mapped_column(Text, nullable=True)  # Full prompt sent to LLM
     context_chunks: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # Retrieved chunks with scores
+    agent_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # Agent config used at generation time
     tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)

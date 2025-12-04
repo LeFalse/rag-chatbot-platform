@@ -10,6 +10,7 @@ import {
   MessageMetrics,
   ProcessDocumentResponse,
   DocumentContent,
+  UpdateCollectionRequest,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8050'
@@ -48,6 +49,26 @@ class ApiClient {
 
   async listCollections(): Promise<Collection[]> {
     const response = await this.client.get('/documents/collections')
+    return response.data
+  }
+
+  async updateCollection(
+    collection_id: string,
+    data: UpdateCollectionRequest
+  ): Promise<Collection> {
+    const response = await this.client.put(
+      `/documents/collections/${collection_id}`,
+      data
+    )
+    return response.data
+  }
+
+  async deleteCollection(
+    collection_id: string
+  ): Promise<{ message: string }> {
+    const response = await this.client.delete(
+      `/documents/collections/${collection_id}`
+    )
     return response.data
   }
 

@@ -9,6 +9,7 @@ from app.models.collection import Collection
 from app.models.document import Document
 from app.schemas.requests.schemas import (
     CreateCollectionRequest,
+    UpdateCollectionRequest,
     UploadDocumentRequest,
 )
 from app.schemas.responses.schemas import DocumentResponse, CollectionResponse
@@ -53,9 +54,15 @@ async def create_collection(
         return CollectionResponse(
             id=str(collection.id),
             name=collection.name,
+            description=collection.description,
             embedding_model=collection.embedding_model,
             embedding_dimension=collection.embedding_dimension,
             document_count=0,
+            system_prompt=collection.system_prompt,
+            personality=collection.personality,
+            temperature=collection.temperature,
+            max_tokens=collection.max_tokens,
+            top_k=collection.top_k,
             created_at=collection.created_at,
         )
     except Exception as e:
@@ -74,9 +81,15 @@ async def list_collections(
             CollectionResponse(
                 id=str(c.id),
                 name=c.name,
+                description=c.description,
                 embedding_model=c.embedding_model,
                 embedding_dimension=c.embedding_dimension,
                 document_count=len(c.documents),
+                system_prompt=c.system_prompt,
+                personality=c.personality,
+                temperature=c.temperature,
+                max_tokens=c.max_tokens,
+                top_k=c.top_k,
                 created_at=c.created_at,
             )
             for c in collections
@@ -121,6 +134,63 @@ async def delete_collection(
             await asyncio.to_thread(shutil.rmtree, folder_path)
 
         return {"message": "Collection deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/collections/{collection_id}")
+async def update_collection(
+    collection_id: str,
+    request: UpdateCollectionRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update a collection's configuration."""
+    try:
+        collection_uuid = UUID(collection_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid collection ID format")
+
+    try:
+        repo = CollectionRepository(session)
+        # Use get_with_documents to eagerly load documents for count
+        collection = await repo.get_with_documents(collection_uuid)
+        if not collection:
+            raise HTTPException(status_code=404, detail="Collection not found")
+
+        # Update only provided fields
+        if request.name is not None:
+            collection.name = request.name
+        if request.description is not None:
+            collection.description = request.description
+        if request.system_prompt is not None:
+            collection.system_prompt = request.system_prompt
+        if request.personality is not None:
+            collection.personality = request.personality
+        if request.temperature is not None:
+            collection.temperature = request.temperature
+        if request.max_tokens is not None:
+            collection.max_tokens = request.max_tokens
+        if request.top_k is not None:
+            collection.top_k = request.top_k
+
+        await session.flush()
+
+        return CollectionResponse(
+            id=str(collection.id),
+            name=collection.name,
+            description=collection.description,
+            embedding_model=collection.embedding_model,
+            embedding_dimension=collection.embedding_dimension,
+            document_count=len(collection.documents) if collection.documents else 0,
+            system_prompt=collection.system_prompt,
+            personality=collection.personality,
+            temperature=collection.temperature,
+            max_tokens=collection.max_tokens,
+            top_k=collection.top_k,
+            created_at=collection.created_at,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

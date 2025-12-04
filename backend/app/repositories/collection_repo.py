@@ -49,3 +49,12 @@ class CollectionRepository(BaseRepository[Collection]):
             .limit(limit)
         )
         return result.scalars().all()
+
+    async def get_with_documents(self, id: object) -> Collection | None:
+        """Get collection by ID with eagerly loaded documents."""
+        result = await self.session.execute(
+            select(Collection)
+            .options(selectinload(Collection.documents))
+            .where(Collection.id == id)
+        )
+        return result.scalar_one_or_none()

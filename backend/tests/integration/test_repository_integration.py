@@ -494,17 +494,25 @@ class TestMessageRepositoryIntegration:
         db_session: AsyncSession,
         conversation: Conversation,
     ):
-        """Test getting messages in order."""
+        """Test getting messages in order.
+
+        Note: Messages are ordered by created_at, then by role (user before assistant)
+        when timestamps are equal. This ensures proper conversation flow display.
+        """
+        from datetime import datetime, timedelta, timezone
+
         repo = MessageRepository(db_session)
 
-        # Create messages
+        # Create messages with explicit timestamps to ensure proper ordering
+        base_time = datetime.now(timezone.utc)
         roles = ["user", "assistant", "user", "assistant"]
-        for role in roles:
+        for i, role in enumerate(roles):
             msg = Message(
                 conversation_id=conversation.id,
                 role=role,
                 content=f"Message from {role}",
                 model="test-model",
+                created_at=base_time + timedelta(seconds=i),
             )
             await repo.create(msg)
 
@@ -514,6 +522,8 @@ class TestMessageRepositoryIntegration:
         assert len(messages) == 4
         assert messages[0].role == "user"
         assert messages[1].role == "assistant"
+        assert messages[2].role == "user"
+        assert messages[3].role == "assistant"
 
     @pytest.mark.asyncio
     async def test_get_recent_messages(
