@@ -97,11 +97,14 @@ rag-chatbot-platform/
 - **Provider Abstraction**: Easily switch between OpenAI and Ollama
 - **Caching Strategy**: Redis for embeddings, sessions, and rate limiting
 - **Streaming**: SSE for real-time chat responses
+- **Agent Configuration**: Per-collection personality, temperature, max_tokens, top_k
+- **Language Detection**: Automatic language enforcement for LLM responses (Spanish, English, French, German, Italian, Japanese, Chinese)
 
 ### Frontend
 - **Real-time Chat**: Streaming message display
-- **Document Management**: Upload, list, delete documents
-- **Metrics Dashboard**: Usage, costs, cache hit rate
+- **Document Management**: Upload, list, delete documents and collections
+- **Collection Settings**: Configure agent behavior per collection
+- **Metrics Dashboard**: Usage, costs, cache hit rate, agent configuration history
 
 ## Progress
 
@@ -115,11 +118,11 @@ rag-chatbot-platform/
 - API routes (documents, chat, metrics)
 - Frontend pages (Chat, Documents, Dashboard)
 - Token tracking, source attribution, metrics visualization
-
-### Backlog
-- Collection-specific system prompts (agent personality/restrictions)
-- Agent configuration UI per collection
-- Prompt templates with variables
+- Collection-specific system prompts and agent configuration
+- Agent configuration UI per collection (personality, temperature, max_tokens, top_k)
+- Agent config stored per message for historical tracking
+- Delete collection with confirmation modal
+- Language detection and automatic prefix injection for multilingual support
 
 ### Ideas for Future
 **RAG Improvements**
@@ -127,6 +130,7 @@ rag-chatbot-platform/
 - Chunk overlap configuration
 - Re-ranking strategies
 - Multi-collection queries
+- Prompt templates with variables
 
 **Safety & Control**
 - Input/output guardrails
