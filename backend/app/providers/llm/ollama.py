@@ -1,11 +1,14 @@
 """Ollama LLM provider implementation."""
 
 import json
+import logging
 from collections.abc import AsyncIterator
 
 import httpx
 
 from app.providers.llm.base import BaseLLMProvider
+
+logger = logging.getLogger(__name__)
 from app.providers.llm.exceptions import (
     LLMConnectionError,
     LLMInvalidRequestError,
@@ -15,7 +18,11 @@ from app.providers.llm.types import (
     ChatMessage,
     LLMConfig,
     LLMResponse,
+    LLMResponseWithTools,
     StreamChunk,
+    ToolCall,
+    ToolDefinition,
+    ToolMessage,
 )
 
 
@@ -43,9 +50,31 @@ class OllamaProvider(BaseLLMProvider):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    # Models that support tool calling in Ollama
+    TOOL_CALLING_MODELS = frozenset({
+        "qwen3",
+        "qwen2.5",
+        "llama3.1",
+        "llama3.2",
+        "mistral",
+        "mixtral",
+        "command-r",
+        "command-r-plus",
+    })
+
     @property
     def provider_name(self) -> str:
         return "ollama"
+
+    @property
+    def supports_tool_calling(self) -> bool:
+        """Check if current model supports tool calling.
+
+        Returns:
+            True if model supports tool calling.
+        """
+        model_base = self.config.model.split(":")[0].lower()
+        return any(model_base.startswith(m) for m in self.TOOL_CALLING_MODELS)
 
     async def generate(
         self,
@@ -183,6 +212,168 @@ class OllamaProvider(BaseLLMProvider):
             except httpx.HTTPError:
                 return False
 
+    async def generate_with_tools(
+        self,
+        messages: list[ChatMessage | ToolMessage],
+        tools: list[ToolDefinition],
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMResponseWithTools:
+        """Generate a response with potential tool calls.
+
+        Uses Ollama's native tool calling support for compatible models.
+
+        Args:
+            messages: Chat messages including tool results.
+            tools: Available tools for the LLM to call.
+            temperature: Override temperature.
+            max_tokens: Override max tokens.
+
+        Returns:
+            LLMResponseWithTools with content and/or tool calls.
+        """
+        if not self.supports_tool_calling:
+            raise NotImplementedError(
+                f"Model {self.config.model} does not support tool calling. "
+                "Use qwen3, llama3.1+, mistral, or command-r models."
+            )
+
+        payload = self._build_payload_with_tools(
+            messages,
+            tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        logger.debug(
+            "Ollama request with %d tools: %s",
+            len(tools),
+            [t.get("function", {}).get("name") for t in tools],
+        )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                logger.debug(
+                    "Ollama raw response message: %s",
+                    json.dumps(data.get("message", {}), indent=2)[:1000],
+                )
+
+                return self._parse_tool_response(data)
+
+            except httpx.ConnectError as e:
+                raise LLMConnectionError(self.provider_name, str(e)) from e
+            except httpx.HTTPStatusError as e:
+                self._handle_http_error(e)
+            except httpx.TimeoutException as e:
+                raise LLMConnectionError(
+                    self.provider_name,
+                    f"Request timed out after {self.timeout}s",
+                ) from e
+
+        # This should never be reached but satisfies type checker
+        raise LLMProviderError("Unexpected error", self.provider_name)
+
+    def _build_payload_with_tools(
+        self,
+        messages: list[ChatMessage | ToolMessage],
+        tools: list[ToolDefinition],
+        *,
+        temperature: float | None,
+        max_tokens: int | None,
+    ) -> dict[str, object]:
+        """Build payload for tool calling request.
+
+        Args:
+            messages: Chat messages.
+            tools: Tool definitions.
+            temperature: Temperature override.
+            max_tokens: Max tokens override.
+
+        Returns:
+            Request payload dictionary.
+        """
+        # Convert messages to Ollama format
+        formatted_messages = []
+        for msg in messages:
+            if msg.get("role") == "tool":
+                # Tool result message
+                formatted_messages.append({
+                    "role": "tool",
+                    "content": msg.get("content", ""),
+                })
+            else:
+                formatted_messages.append(dict(msg))
+
+        return {
+            "model": self.config.model,
+            "messages": formatted_messages,
+            "tools": tools,
+            "stream": False,
+            "options": {
+                "temperature": temperature or self.config.temperature,
+                "num_predict": max_tokens or self.config.max_tokens,
+                "top_p": self.config.top_p,
+                "num_ctx": self.config.context_window_tools,
+            },
+        }
+
+    def _parse_tool_response(self, data: dict[str, object]) -> LLMResponseWithTools:
+        """Parse Ollama response with potential tool calls.
+
+        Args:
+            data: Raw response from Ollama API.
+
+        Returns:
+            Parsed LLMResponseWithTools.
+        """
+        message = data.get("message", {})
+        content = message.get("content")
+        raw_tool_calls = message.get("tool_calls")
+
+        # Filter out qwen3 "thinking" content that may leak into response
+        if content:
+            # Remove </think> tags and content before them
+            if "</think>" in content:
+                content = content.split("</think>")[-1].strip()
+            # Remove content that looks like thinking output (starts with special chars)
+            if content and content[0] in "Ɛ\ue000\uf000":
+                # Find where actual content starts (after thinking block)
+                for marker in ["</think>", "\n\n", "---"]:
+                    if marker in content:
+                        content = content.split(marker)[-1].strip()
+                        break
+
+        # Parse tool calls if present
+        tool_calls: list[ToolCall] | None = None
+        if raw_tool_calls:
+            tool_calls = []
+            for i, tc in enumerate(raw_tool_calls):
+                func = tc.get("function", {})
+                tool_calls.append(
+                    ToolCall(
+                        id=f"call_{i}",
+                        name=func.get("name", ""),
+                        arguments=func.get("arguments", {}),
+                    )
+                )
+
+        return LLMResponseWithTools(
+            content=content if content else None,
+            tool_calls=tool_calls,
+            model=data.get("model", self.config.model),
+            tokens_input=data.get("prompt_eval_count", 0),
+            tokens_output=data.get("eval_count", 0),
+            finish_reason=data.get("done_reason"),
+        )
+
     def _build_payload(
         self,
         messages: list[ChatMessage],
@@ -211,8 +402,7 @@ class OllamaProvider(BaseLLMProvider):
                 "num_predict": max_tokens or self.config.max_tokens,
                 "top_p": self.config.top_p,
                 "stop": self.config.stop_sequences or None,
-                # Performance optimizations (GPU handles larger context efficiently)
-                "num_ctx": 4096,  # Keep default context window for quality
+                "num_ctx": self.config.context_window,
                 "num_batch": 512,  # Batch size for prompt processing
             },
         }

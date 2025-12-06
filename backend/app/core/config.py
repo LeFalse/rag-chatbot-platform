@@ -41,7 +41,13 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
 
     # Ollama specific
-    ollama_model: str = "llama3.2"
+    # LLM_MODEL env var is shared with docker-compose for Ollama container
+    ollama_model: str = "qwen3:8b"
+    llm_model: str = "qwen3:8b"  # Alias for frontend display
+
+    # LLM Generation limits
+    max_tokens_default: int = 512  # Default for new collections
+    max_tokens_limit: int = 8192  # Maximum allowed value
 
     # Document processing
     chunk_size: int = 512

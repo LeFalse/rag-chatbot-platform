@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import './LLMSelector.css'
+import { apiClient } from '../../services/api'
 
 export type LLMProvider = 'ollama' | 'openai'
 
@@ -9,27 +10,49 @@ interface LLMSelectorProps {
   disabled?: boolean
 }
 
-const LLM_PROVIDERS: { value: LLMProvider; label: string; icon: string; description: string }[] = [
-  {
-    value: 'ollama',
-    label: 'Ollama',
-    icon: '🦙',
-    description: 'Local LLM - Fast & Private',
-  },
-  {
-    value: 'openai',
-    label: 'OpenAI',
-    icon: '🤖',
-    description: 'GPT-4 - Most Capable',
-  },
-]
+interface LLMProviderConfig {
+  value: LLMProvider
+  label: string
+  icon: string
+  description: string
+}
 
 export const LLMSelector: React.FC<LLMSelectorProps> = ({ value, onChange, disabled = false }) => {
+  const [ollamaModel, setOllamaModel] = useState<string>('Loading...')
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await apiClient.getConfig()
+        setOllamaModel(config.llm_model || config.ollama_model)
+      } catch (error) {
+        console.error('Failed to fetch config:', error)
+        setOllamaModel('Unknown')
+      }
+    }
+    fetchConfig()
+  }, [])
+
+  const providers: LLMProviderConfig[] = [
+    {
+      value: 'ollama',
+      label: 'Ollama',
+      icon: '🦙',
+      description: `Local LLM - ${ollamaModel}`,
+    },
+    {
+      value: 'openai',
+      label: 'OpenAI',
+      icon: '🤖',
+      description: 'GPT-4 - Most Capable',
+    },
+  ]
+
   return (
     <div className="llm-selector">
       <label className="llm-label">AI Model</label>
       <div className="llm-options">
-        {LLM_PROVIDERS.map((provider) => (
+        {providers.map((provider) => (
           <button
             key={provider.value}
             className={`llm-option ${value === provider.value ? 'active' : ''}`}
@@ -43,7 +66,7 @@ export const LLMSelector: React.FC<LLMSelectorProps> = ({ value, onChange, disab
         ))}
       </div>
       <p className="llm-description">
-        {LLM_PROVIDERS.find((p) => p.value === value)?.description}
+        {providers.find((p) => p.value === value)?.description}
       </p>
     </div>
   )

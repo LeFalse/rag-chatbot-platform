@@ -13,13 +13,16 @@ echo "Ollama is ready!"
 # Pull required models
 echo "Pulling required models..."
 
-# Embedding model
+# Embedding model (always required)
 echo "Pulling nomic-embed-text..."
 ollama pull nomic-embed-text
 
-# LLM model
-echo "Pulling llama3.2..."
-ollama pull llama3.2
+# LLM model (configurable via environment variable)
+# Default: qwen3:8b (best for tool calling)
+# Alternative: llama3.2 (lighter, no tool calling)
+LLM_MODEL="${LLM_MODEL:-qwen3:8b}"
+echo "Pulling LLM model: $LLM_MODEL"
+ollama pull "$LLM_MODEL"
 
 echo "All models ready!"
 

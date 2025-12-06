@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Collection, PersonalityType, UpdateCollectionRequest } from '../../types'
 import { Button } from '../ui'
+import { apiClient } from '../../services/api'
 import './CollectionConfigModal.css'
 
 interface CollectionConfigModalProps {
@@ -66,6 +67,31 @@ export const CollectionConfigModal: React.FC<CollectionConfigModalProps> = ({
   const [topK, setTopK] = useState(collection.top_k)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [maxTokensLimit, setMaxTokensLimit] = useState(8192)
+
+  // Fetch config limits on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await apiClient.getConfig()
+        setMaxTokensLimit(config.max_tokens_limit)
+      } catch (err) {
+        console.error('Failed to fetch config:', err)
+      }
+    }
+    fetchConfig()
+  }, [])
+
+  // MCP Configuration state
+  const [gitlabEnabled, setGitlabEnabled] = useState(
+    collection.mcp_config?.gitlab?.enabled ?? false
+  )
+  const [gitlabProjectId, setGitlabProjectId] = useState(
+    collection.mcp_config?.gitlab?.project_id ?? ''
+  )
+  const [gitlabUrl, setGitlabUrl] = useState(
+    collection.mcp_config?.gitlab?.gitlab_url ?? 'https://gitlab.com'
+  )
 
   useEffect(() => {
     // Reset form when collection changes
@@ -77,6 +103,10 @@ export const CollectionConfigModal: React.FC<CollectionConfigModalProps> = ({
     setMaxTokens(collection.max_tokens)
     setTopK(collection.top_k)
     setError(null)
+    // MCP config
+    setGitlabEnabled(collection.mcp_config?.gitlab?.enabled ?? false)
+    setGitlabProjectId(collection.mcp_config?.gitlab?.project_id ?? '')
+    setGitlabUrl(collection.mcp_config?.gitlab?.gitlab_url ?? 'https://gitlab.com')
   }, [collection])
 
   if (!isOpen) return null
@@ -87,14 +117,27 @@ export const CollectionConfigModal: React.FC<CollectionConfigModalProps> = ({
     setIsSaving(true)
 
     try {
+      // Build MCP config if GitLab is enabled
+      const mcpConfig = gitlabEnabled && gitlabProjectId.trim()
+        ? {
+            gitlab: {
+              enabled: true,
+              project_id: gitlabProjectId.trim(),
+              gitlab_url: gitlabUrl.trim() || 'https://gitlab.com',
+            },
+          }
+        : null
+
       await onSave({
         name,
         description: description || undefined,
         personality,
-        system_prompt: personality === 'custom' ? systemPrompt : undefined,
+        // Send null explicitly when not custom to clear the old value
+        system_prompt: personality === 'custom' ? systemPrompt : null,
         temperature,
         max_tokens: maxTokens,
         top_k: topK,
+        mcp_config: mcpConfig,
       })
       onClose()
     } catch (err) {
@@ -252,13 +295,84 @@ export const CollectionConfigModal: React.FC<CollectionConfigModalProps> = ({
                     id="max-tokens"
                     type="number"
                     min={64}
-                    max={4096}
+                    max={maxTokensLimit}
                     step={64}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(parseInt(e.target.value) || 512)}
                   />
-                  <span className="field-hint">Maximum response length</span>
+                  <span className="field-hint">Maximum response length (64-{maxTokensLimit})</span>
                 </div>
+              </div>
+            </section>
+
+            {/* MCP Integration Section */}
+            <section className="config-section">
+              <h3 className="config-section-title">Tool Integration (MCP)</h3>
+              <p className="config-section-description">
+                Enable repository access for code-aware responses
+              </p>
+
+              <div className="mcp-toggle-card">
+                <div className="mcp-toggle-header">
+                  <div className="mcp-toggle-info">
+                    <span className="mcp-icon">🦊</span>
+                    <div className="mcp-toggle-text">
+                      <span className="mcp-toggle-label">GitLab Integration</span>
+                      <span className="mcp-toggle-description">
+                        Allow the assistant to search and read code from a GitLab repository
+                      </span>
+                    </div>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={gitlabEnabled}
+                      onChange={(e) => setGitlabEnabled(e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                {gitlabEnabled && (
+                  <div className="mcp-config-fields">
+                    <div className="config-field">
+                      <label htmlFor="gitlab-project-id">Project Path</label>
+                      <input
+                        id="gitlab-project-id"
+                        type="text"
+                        value={gitlabProjectId}
+                        onChange={(e) => setGitlabProjectId(e.target.value)}
+                        placeholder="e.g., group/project or username/repo"
+                        required={gitlabEnabled}
+                      />
+                      <span className="field-hint">
+                        The GitLab project path (e.g., namespace/project-name)
+                      </span>
+                    </div>
+
+                    <div className="config-field">
+                      <label htmlFor="gitlab-url">GitLab URL</label>
+                      <input
+                        id="gitlab-url"
+                        type="text"
+                        value={gitlabUrl}
+                        onChange={(e) => setGitlabUrl(e.target.value)}
+                        placeholder="https://gitlab.com"
+                      />
+                      <span className="field-hint">
+                        Self-hosted GitLab instance URL (default: gitlab.com)
+                      </span>
+                    </div>
+
+                    <div className="mcp-info-box">
+                      <span className="info-icon">ℹ️</span>
+                      <span>
+                        A GitLab Personal Access Token with <code>read_api</code> scope must be
+                        configured in the server environment (GITLAB_TOKEN).
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
 

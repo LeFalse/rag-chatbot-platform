@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Button, Card, CardBody, Input, Loader, CreateConversationModal, LLMSelector, type LLMProvider } from '../components/ui'
+import { Button, Card, CardBody, Loader, CreateConversationModal, LLMSelector, MarkdownRenderer, type LLMProvider } from '../components/ui'
 import { apiClient } from '../services/api'
 import { Collection, Conversation, Message } from '../types'
 import './Chat.css'
@@ -302,7 +302,13 @@ export const Chat: React.FC = () => {
             <div className="messages-container">
               {messages.map((msg) => (
                 <div key={msg.id} className={`message message-${msg.role}`}>
-                  <div className="message-content">{msg.content}</div>
+                  <div className="message-content">
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                   {msg.sources && msg.sources.length > 0 && (
                     <details className="message-sources">
                       <summary className="sources-toggle">

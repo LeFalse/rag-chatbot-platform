@@ -1,6 +1,10 @@
 """Document management routes."""
 
+import asyncio
+import shutil
+from pathlib import Path
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,9 +14,12 @@ from app.models.document import Document
 from app.schemas.requests.schemas import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
-    UploadDocumentRequest,
 )
-from app.schemas.responses.schemas import DocumentResponse, CollectionResponse
+from app.schemas.responses.schemas import (
+    CollectionResponse,
+    DocumentResponse,
+    MCPConfigResponse,
+)
 from app.services.document_service import DocumentService
 from app.services.embedding_service import EmbeddingService
 from app.services.cache.embedding_cache import EmbeddingCache
@@ -63,6 +70,7 @@ async def create_collection(
             temperature=collection.temperature,
             max_tokens=collection.max_tokens,
             top_k=collection.top_k,
+            mcp_config=MCPConfigResponse(gitlab=collection.mcp_config.get("gitlab") if collection.mcp_config else None),
             created_at=collection.created_at,
         )
     except Exception as e:
@@ -90,6 +98,7 @@ async def list_collections(
                 temperature=c.temperature,
                 max_tokens=c.max_tokens,
                 top_k=c.top_k,
+                mcp_config=MCPConfigResponse(gitlab=c.mcp_config.get("gitlab") if c.mcp_config else None),
                 created_at=c.created_at,
             )
             for c in collections
@@ -126,11 +135,8 @@ async def delete_collection(
         await collection_repo.delete(collection_uuid)
 
         # Delete collection folder from uploads
-        import asyncio
-        from pathlib import Path
         folder_path = Path("uploads") / str(collection_uuid)
         if await asyncio.to_thread(folder_path.exists):
-            import shutil
             await asyncio.to_thread(shutil.rmtree, folder_path)
 
         return {"message": "Collection deleted successfully"}
@@ -162,16 +168,29 @@ async def update_collection(
             collection.name = request.name
         if request.description is not None:
             collection.description = request.description
-        if request.system_prompt is not None:
-            collection.system_prompt = request.system_prompt
+
+        # Handle personality and system_prompt together
+        # When personality changes to non-custom, clear the system_prompt
         if request.personality is not None:
             collection.personality = request.personality
+            if request.personality != "custom":
+                # Clear system_prompt when switching away from custom
+                collection.system_prompt = None
+            elif request.system_prompt is not None:
+                # Only set system_prompt if personality is custom
+                collection.system_prompt = request.system_prompt
+        elif request.system_prompt is not None:
+            # Allow updating system_prompt without changing personality
+            collection.system_prompt = request.system_prompt
         if request.temperature is not None:
             collection.temperature = request.temperature
         if request.max_tokens is not None:
             collection.max_tokens = request.max_tokens
         if request.top_k is not None:
             collection.top_k = request.top_k
+        if request.mcp_config is not None:
+            # Convert Pydantic model to dict for JSON storage
+            collection.mcp_config = request.mcp_config.model_dump(exclude_none=True)
 
         await session.flush()
 
@@ -187,6 +206,7 @@ async def update_collection(
             temperature=collection.temperature,
             max_tokens=collection.max_tokens,
             top_k=collection.top_k,
+            mcp_config=MCPConfigResponse(gitlab=collection.mcp_config.get("gitlab") if collection.mcp_config else None),
             created_at=collection.created_at,
         )
     except HTTPException:
@@ -313,9 +333,6 @@ async def get_document_content(
             raise HTTPException(status_code=404, detail="Document not found")
 
         # Read file from disk
-        from pathlib import Path
-        import asyncio
-
         file_path = Path("uploads") / str(doc.collection_id) / doc.filename
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Document file not found")

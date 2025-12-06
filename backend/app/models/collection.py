@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Float, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -38,6 +38,9 @@ class Collection(Base):
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=512)
     top_k: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+
+    # MCP (Model Context Protocol) configuration for tool access
+    mcp_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

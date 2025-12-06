@@ -1,6 +1,7 @@
 """Configuration and fixtures for API integration tests."""
 
 import shutil
+from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -53,10 +54,19 @@ async def api_client(session: AsyncSession, mock_redis_client: AsyncMock) -> Asy
     async def mock_get_redis():
         return mock_redis_client
 
-    # Mock the get_redis_client function
+    # Create a mock AsyncSessionLocal that returns the test session
+    # This is needed because /ask endpoint uses AsyncSessionLocal() directly
+    @asynccontextmanager
+    async def mock_async_session_local():
+        yield session
+
+    # Mock the get_redis_client function and AsyncSessionLocal
     with patch(
         "app.api.routes.chat.get_redis_client",
         new=mock_get_redis
+    ), patch(
+        "app.api.routes.chat.AsyncSessionLocal",
+        new=mock_async_session_local
     ), patch(
         "app.api.routes.documents.get_redis_client",
         new=mock_get_redis
@@ -81,14 +91,3 @@ async def api_client(session: AsyncSession, mock_redis_client: AsyncMock) -> Asy
             shutil.rmtree(folder_path)
 
 
-@pytest_asyncio.fixture
-async def api_test_collection(session: AsyncSession) -> Collection:
-    """Create a test collection for API tests."""
-    collection = Collection(
-        name="api-test-collection",
-        embedding_model="nomic-embed-text",
-        embedding_dimension=768,
-    )
-    session.add(collection)
-    await session.flush()
-    return collection

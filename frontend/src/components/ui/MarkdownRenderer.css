@@ -1,0 +1,241 @@
+/* Markdown Content Container */
+.markdown-content {
+  line-height: 1.4;
+  font-size: 14px;
+  color: #1a1a2e;
+}
+
+/* Reset spacing for all direct children */
+.markdown-content > * {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+
+.markdown-content > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-content > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings */
+.md-h1 {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em 0;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid #e1e4e8;
+  color: #1a1a2e;
+}
+
+.md-h2 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em 0;
+  color: #1a1a2e;
+}
+
+.md-h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a2e;
+}
+
+.md-h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a2e;
+}
+
+/* Paragraphs */
+.md-p {
+  margin: 0;
+}
+
+/* Strong/Bold */
+.md-strong {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+/* Emphasis/Italic */
+.md-em {
+  font-style: italic;
+}
+
+/* Inline Code */
+.inline-code {
+  background-color: rgba(175, 184, 193, 0.2);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #e83e8c;
+}
+
+/* Code Block Wrapper */
+.code-block-wrapper {
+  margin: 0.5em 0;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #404040;
+}
+
+.code-language {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.copy-button {
+  background: transparent;
+  border: 1px solid #6b7280;
+  color: #9ca3af;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.copy-button:hover {
+  background: #4b5563;
+  color: #fff;
+  border-color: #4b5563;
+}
+
+/* Lists */
+.md-ul,
+.md-ol {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.md-ul {
+  list-style-type: disc;
+}
+
+.md-ol {
+  list-style-type: decimal;
+}
+
+.md-li {
+  margin: 0;
+  padding-left: 0.2em;
+}
+
+/* List item first content - unwrapped from paragraph */
+.md-li-first {
+  display: inline;
+}
+
+.md-li > .md-ul,
+.md-li > .md-ol {
+  margin: 0.1em 0;
+}
+
+/* Blockquote */
+.md-blockquote {
+  margin: 0.4em 0;
+  padding: 0.3em 0.8em;
+  border-left: 3px solid #3498db;
+  background-color: rgba(52, 152, 219, 0.1);
+  color: #555;
+}
+
+.md-blockquote p {
+  margin: 0;
+}
+
+/* Horizontal Rule */
+.md-hr {
+  margin: 0;
+  border: none;
+  border-top: 1px solid #e1e4e8;
+}
+
+/* Links */
+.md-link {
+  color: #3498db;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.md-link:hover {
+  border-bottom-color: #3498db;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.md-th,
+.md-td {
+  padding: 8px 12px;
+  border: 1px solid #e1e4e8;
+  text-align: left;
+}
+
+.md-th {
+  background-color: #f6f8fa;
+  font-weight: 600;
+}
+
+.md-td {
+  background-color: #fff;
+}
+
+/* Dark mode support for messages */
+.message-assistant .markdown-content {
+  color: #1a1a2e;
+}
+
+.message-assistant .md-h1,
+.message-assistant .md-h2,
+.message-assistant .md-h3,
+.message-assistant .md-h4,
+.message-assistant .md-strong {
+  color: #1a1a2e;
+}
+
+/* Nested content spacing */
+.md-li > .md-p {
+  margin: 0;
+}
+
+.md-li > p {
+  margin: 0;
+}
+
+/* Task lists (GFM) */
+.md-li input[type="checkbox"] {
+  margin-right: 0.5em;
+}
+
+/* Strikethrough (GFM) */
+.markdown-content del {
+  text-decoration: line-through;
+  color: #6b7280;
+}

@@ -60,8 +60,15 @@ class MetricsResponse(BaseModel):
     average_latency_ms: float = Field(..., description="Average latency in ms")
 
 
+class MCPConfigResponse(BaseModel):
+    """MCP configuration response."""
+
+    gitlab: dict | None = Field(None, description="GitLab MCP configuration")
+
+
 class CollectionResponse(BaseModel):
     """Response for a collection."""
+
     id: str = Field(..., description="Collection ID")
     name: str = Field(..., description="Collection name")
     description: str | None = Field(None, description="Collection description")
@@ -74,6 +81,8 @@ class CollectionResponse(BaseModel):
     temperature: float = Field(0.5, description="LLM temperature")
     max_tokens: int = Field(512, description="Max response tokens")
     top_k: int = Field(5, description="Number of chunks to retrieve")
+    # MCP configuration
+    mcp_config: MCPConfigResponse | None = Field(None, description="MCP tool configuration")
     created_at: datetime = Field(..., description="Creation timestamp")
 
     class Config:

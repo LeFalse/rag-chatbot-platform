@@ -16,17 +16,16 @@ from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.message_repo import MessageRepository
 from app.services.cache.session_cache import SessionCache
 from app.services.embedding_service import EmbeddingService
+from app.services.language_utils import (
+    LANGUAGE_INSTRUCTION,
+    PERSONALITY_PROMPTS,
+    detect_language_prefix,
+    has_language_instruction,
+)
 
 
 class ChatService:
     """Service for chat with RAG (Retrieval-Augmented Generation)."""
-
-    # Personality presets for different assistant behaviors
-    PERSONALITY_PROMPTS = {
-        "professional": "You are a professional assistant. Be formal, concise, and accurate.",
-        "friendly": "You are a friendly assistant. Be conversational, helpful, and approachable.",
-        "technical": "You are a technical assistant. Be detailed, precise, and use technical terminology when appropriate.",
-    }
 
     DEFAULT_SYSTEM_PROMPT = """You are a precise assistant that answers questions based ONLY on the provided documents.
 
@@ -65,45 +64,13 @@ Critical Instructions:
         parts = []
 
         # Add personality intro if provided
-        if personality and personality in self.PERSONALITY_PROMPTS:
-            parts.append(self.PERSONALITY_PROMPTS[personality])
+        if personality and personality in PERSONALITY_PROMPTS:
+            parts.append(PERSONALITY_PROMPTS[personality])
 
         # Default RAG instructions
         parts.append(self.DEFAULT_SYSTEM_PROMPT)
 
         return "\n\n".join(parts), system_prompt
-
-    # Language keywords mapping for auto-detection
-    LANGUAGE_PREFIXES: dict[tuple[str, ...], str] = {
-        ("espanhol", "spanish"): "[Respond in Spanish] ",
-        ("inglês", "english"): "[Respond in English] ",
-        ("francês", "french"): "[Respond in French] ",
-        ("alemão", "german"): "[Respond in German] ",
-        ("italiano", "italian"): "[Respond in Italian] ",
-        ("japonês", "japanese"): "[Respond in Japanese] ",
-        ("chinês", "chinese"): "[Respond in Chinese] ",
-    }
-
-    def _detect_language_prefix(self, custom_instructions: str | None) -> str:
-        """Detect language instruction and return appropriate prefix.
-
-        This helps enforce language instructions for models that might
-        otherwise ignore system prompt language directives.
-
-        Args:
-            custom_instructions: The custom system prompt to analyze.
-
-        Returns:
-            A prefix string like "[Respond in Spanish] " or empty string.
-        """
-        if not custom_instructions:
-            return ""
-
-        custom_lower = custom_instructions.lower()
-        for keywords, prefix in self.LANGUAGE_PREFIXES.items():
-            if any(kw in custom_lower for kw in keywords):
-                return prefix
-        return ""
 
     def __init__(
         self,
@@ -213,7 +180,7 @@ Critical Instructions:
         base_prompt, custom_instructions = self._get_system_prompt(system_prompt, personality)
 
         # Detect language instruction and create prefix for user message
-        lang_prefix = self._detect_language_prefix(custom_instructions)
+        lang_prefix = detect_language_prefix(custom_instructions)
 
         # Add user message to history (with lang prefix for LLM only)
         question_for_llm = f"{lang_prefix}{question}" if lang_prefix else question
@@ -241,6 +208,11 @@ Critical Instructions:
         system_content = f"{base_prompt}\n\nContext:\n{context}"
         if custom_instructions:
             system_content += f"\n\n=== ADDITIONAL INSTRUCTIONS ===\n{custom_instructions}"
+
+        # Only add default language instruction if custom prompt doesn't have one
+        # This allows users to set specific language requirements in collection settings
+        if not custom_instructions or not has_language_instruction(custom_instructions):
+            system_content += LANGUAGE_INSTRUCTION
 
         # Add system message with context if not already there
         has_system = any(

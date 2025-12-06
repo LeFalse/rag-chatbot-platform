@@ -30,6 +30,17 @@ export interface Document {
 
 export type PersonalityType = 'professional' | 'friendly' | 'technical' | 'custom'
 
+// MCP (Model Context Protocol) configuration types
+export interface GitLabMCPConfig {
+  enabled: boolean
+  project_id: string
+  gitlab_url: string
+}
+
+export interface MCPConfig {
+  gitlab?: GitLabMCPConfig | null
+}
+
 export interface Collection {
   id: string
   name: string
@@ -43,17 +54,20 @@ export interface Collection {
   temperature: number
   max_tokens: number
   top_k: number
+  // MCP configuration
+  mcp_config?: MCPConfig | null
   created_at: string
 }
 
 export interface UpdateCollectionRequest {
   name?: string
   description?: string
-  system_prompt?: string
+  system_prompt?: string | null
   personality?: PersonalityType
   temperature?: number
   max_tokens?: number
   top_k?: number
+  mcp_config?: MCPConfig | null
 }
 
 export interface MetricsData {
@@ -130,4 +144,12 @@ export interface DocumentContent {
   filename: string
   content: string
   content_type: string | null
+}
+
+export interface AppConfig {
+  llm_model: string
+  ollama_model: string
+  embedding_model: string
+  max_tokens_default: number
+  max_tokens_limit: number
 }

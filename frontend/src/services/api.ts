@@ -1,9 +1,9 @@
 import axios, { AxiosInstance } from 'axios'
 import {
+  AppConfig,
   Collection,
   Conversation,
   Document,
-  Message,
   ConversationHistory,
   MetricsData,
   ConversationMetrics,
@@ -30,6 +30,12 @@ class ApiClient {
   // Health check
   async checkHealth(): Promise<{ status: string }> {
     const response = await this.client.get('/health')
+    return response.data
+  }
+
+  // Config
+  async getConfig(): Promise<AppConfig> {
+    const response = await this.client.get('/config')
     return response.data
   }
 

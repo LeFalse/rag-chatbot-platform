@@ -1,6 +1,24 @@
 """Request schemas for API endpoints."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.config import get_settings
+
+
+class GitLabMCPConfig(BaseModel):
+    """GitLab MCP configuration."""
+
+    enabled: bool = Field(True, description="Whether GitLab MCP is enabled")
+    project_id: str = Field(..., description="GitLab project ID (e.g., 'group/project')")
+    gitlab_url: str = Field(
+        "https://gitlab.com", description="GitLab instance URL"
+    )
+
+
+class MCPConfigRequest(BaseModel):
+    """MCP configuration for a collection."""
+
+    gitlab: GitLabMCPConfig | None = Field(None, description="GitLab MCP configuration")
 
 
 class UploadDocumentRequest(BaseModel):
@@ -32,6 +50,7 @@ class CreateCollectionRequest(BaseModel):
 
 class UpdateCollectionRequest(BaseModel):
     """Request for updating a collection's configuration."""
+
     name: str | None = Field(None, description="Collection name")
     description: str | None = Field(None, description="Collection description")
     system_prompt: str | None = Field(None, description="Custom system prompt")
@@ -39,5 +58,18 @@ class UpdateCollectionRequest(BaseModel):
         None, description="Personality preset: professional, friendly, technical, custom"
     )
     temperature: float | None = Field(None, ge=0.0, le=2.0, description="LLM temperature")
-    max_tokens: int | None = Field(None, ge=1, le=4096, description="Max response tokens")
+    max_tokens: int | None = Field(None, ge=1, description="Max response tokens")
     top_k: int | None = Field(None, ge=1, le=20, description="Number of chunks to retrieve")
+    mcp_config: MCPConfigRequest | None = Field(None, description="MCP tool configuration")
+
+    @field_validator("max_tokens")
+    @classmethod
+    def validate_max_tokens(cls, v: int | None) -> int | None:
+        """Validate max_tokens against configured limit."""
+        if v is not None:
+            settings = get_settings()
+            if v > settings.max_tokens_limit:
+                raise ValueError(
+                    f"max_tokens must be at most {settings.max_tokens_limit}"
+                )
+        return v

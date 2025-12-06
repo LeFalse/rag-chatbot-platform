@@ -4,10 +4,11 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.collection import Collection
+from app.models.conversation import Conversation
 from app.models.document import Document
 from app.models.message import Message
 from app.models.metric import Metric
@@ -301,8 +302,6 @@ class MetricsService:
         Returns:
             List of conversations with their metrics.
         """
-        from app.models.conversation import Conversation
-
         # Get all conversations with aggregated message metrics
         query = (
             select(
@@ -346,8 +345,6 @@ class MetricsService:
         Returns:
             List of messages with their metrics and agent config.
         """
-        from sqlalchemy import case
-
         # Get messages, ordering by created_at and then by role
         # (user messages should appear before assistant messages when timestamps are equal)
         role_order = case(

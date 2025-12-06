@@ -171,14 +171,26 @@ class TestChatEndpoints:
 
     @pytest.mark.asyncio
     async def test_ask_question_streaming(
-        self, api_client: AsyncClient, api_test_collection: Collection
+        self, api_client: AsyncClient
     ):
         """Test asking a question with streaming response."""
-        # Create a conversation first
+        # Create a collection via API (needed because /ask uses AsyncSessionLocal)
+        coll_response = await api_client.post(
+            "/documents/collections",
+            json={
+                "name": "test-coll-ask",
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimension": 768,
+            },
+        )
+        assert coll_response.status_code == 200
+        collection_id = coll_response.json()["id"]
+
+        # Create a conversation
         create_response = await api_client.post(
             "/chat/conversations",
             json={
-                "collection_id": str(api_test_collection.id),
+                "collection_id": collection_id,
                 "title": "Test conversation for asking",
             },
         )
