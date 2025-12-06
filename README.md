@@ -19,6 +19,7 @@ This platform enables you to:
 | Vector Store | PostgreSQL + pgvector |
 | Cache | Redis |
 | LLM | OpenAI / Ollama (abstracted) |
+| Tools | MCP (Model Context Protocol) |
 | Container | Docker + Docker Compose |
 
 ## Architecture
@@ -45,20 +46,22 @@ This platform enables you to:
 │   └───────────┘   └───────────┘   └───────────┘     │     │
 │                         │                           │     │
 │                         ▼                           │     │
-│                ┌─────────────────┐                  │     │
-│                │ Repository Layer│                  │     │
-│                └─────────────────┘                  │     │
-└─────────────────────────┬───────────────────────────┼─────┘
-                          │                           │
-                          ▼                           ▼
+│       ┌─────────────────┐  ┌─────────────────┐      │     │
+│       │ Repository Layer│  │   MCP Client    │──────┼──┐  │
+│       └─────────────────┘  └─────────────────┘      │  │  │
+└─────────────────────────┬───────────────────────────┼──┼──┘
+                          │                           │  │
+                          ▼                           ▼  ▼
 ┌───────────────────────────────────────┐   ┌───────────────┐
 │              DATA LAYER               │   │    OLLAMA     │
 │                                       │   │   (LLM/Emb)   │
 │   ┌──────────────┐  ┌──────────────┐  │   │     + GPU     │
 │   │  PostgreSQL  │  │    Redis     │  │   └───────────────┘
-│   │  + pgvector  │  │   (Cache)    │  │
-│   └──────────────┘  └──────────────┘  │
-└───────────────────────────────────────┘
+│   │  + pgvector  │  │   (Cache)    │  │           │
+│   └──────────────┘  └──────────────┘  │   ┌───────────────┐
+└───────────────────────────────────────┘   │    GitLab     │
+                                            │   (via MCP)   │
+                                            └───────────────┘
 ```
 
 ## Project Structure
@@ -70,6 +73,7 @@ rag-chatbot-platform/
 │   │   ├── api/              # API routes and middleware
 │   │   ├── services/         # Business logic + cache
 │   │   ├── providers/        # LLM and embedding abstractions
+│   │   ├── mcp/              # MCP client and tool integrations
 │   │   ├── repositories/     # Data access layer
 │   │   ├── models/           # SQLAlchemy models
 │   │   ├── schemas/          # Pydantic DTOs
@@ -98,12 +102,15 @@ rag-chatbot-platform/
 - **Caching Strategy**: Redis for embeddings, sessions, and rate limiting
 - **Streaming**: SSE for real-time chat responses
 - **Agent Configuration**: Per-collection personality, temperature, max_tokens, top_k
-- **Language Detection**: Automatic language enforcement for LLM responses (Spanish, English, French, German, Italian, Japanese, Chinese)
+- **Language Detection**: Automatic language enforcement for LLM responses
+- **MCP Integration**: Tool calling with GitLab support (search files, read code, issues, merge requests)
+- **Agent Service**: Agentic loop with tool execution for LLMs that support function calling
+- **Dual Mode**: Simple RAG when no MCP configured, Agent mode when MCP is enabled per collection
 
 ### Frontend
-- **Real-time Chat**: Streaming message display
+- **Real-time Chat**: Streaming message display with markdown rendering
 - **Document Management**: Upload, list, delete documents and collections
-- **Collection Settings**: Configure agent behavior per collection
+- **Collection Settings**: Configure agent behavior and MCP integrations per collection
 - **Metrics Dashboard**: Usage, costs, cache hit rate, agent configuration history
 
 ## Progress
@@ -115,7 +122,7 @@ rag-chatbot-platform/
 - LLM/Embedding provider abstraction (Ollama tested)
 - Cache layer (Redis: embeddings, sessions, rate limiting)
 - Document processing and Chat service with RAG streaming
-- API routes (documents, chat, metrics)
+- API routes (documents, chat, metrics, config)
 - Frontend pages (Chat, Documents, Dashboard)
 - Token tracking, source attribution, metrics visualization
 - Collection-specific system prompts and agent configuration
@@ -123,6 +130,9 @@ rag-chatbot-platform/
 - Agent config stored per message for historical tracking
 - Delete collection with confirmation modal
 - Language detection and automatic prefix injection for multilingual support
+- MCP (Model Context Protocol) integration with GitLab
+- Agent service with tool calling loop for compatible LLMs
+- Config-driven max_tokens limits with API endpoint
 
 ### Ideas for Future
 **RAG Improvements**
@@ -138,8 +148,8 @@ rag-chatbot-platform/
 - Audit logging
 
 **Tools & Integrations**
-- Tool/function calling
-- Web search, calculator
+- Additional MCP servers (GitHub, Jira, Confluence)
+- Web search, calculator tools
 - Custom tools per collection
 - Webhooks
 

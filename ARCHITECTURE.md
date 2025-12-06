@@ -23,6 +23,7 @@ This document describes the architectural decisions and design patterns used in 
 | Strategy | `providers/` | Interchangeable LLM/Embedding strategies |
 | Dependency Injection | `api/deps.py` | Decouple dependencies |
 | DTO | `schemas/` | Data transfer between layers |
+| Adapter | `mcp/` | Adapt MCP protocol to internal tool types |
 
 ## Layer Architecture
 
@@ -40,6 +41,7 @@ This document describes the architectural decisions and design patterns used in 
 │                      Service Layer                          │
 │  - Business logic orchestration                             │
 │  - ChatService: RAG pipeline                                │
+│  - AgentService: Tool calling loop with MCP                 │
 │  - DocumentService: upload, chunking                        │
 │  - EmbeddingService: vector generation                      │
 │  - MetricsService: usage tracking                           │
@@ -113,6 +115,64 @@ USING hnsw (embedding vector_cosine_ops);
    User question → Generate embedding → Vector similarity search → Retrieve top-k chunks → Build context prompt → LLM generates response → Stream via SSE
 ```
 
+## MCP Integration (Tool Calling)
+
+The platform supports tool calling via the Model Context Protocol (MCP) for LLMs that support function calling. Currently, only GitLab is available as an MCP server.
+
+### Chat Flow Decision
+
+```
+User sends question
+        │
+        ▼
+┌───────────────────┐
+│ Collection has    │
+│ MCP configured?   │
+└───────────────────┘
+        │
+   ┌────┴────┐
+   │         │
+  Yes        No
+   │         │
+   ▼         ▼
+┌──────┐  ┌──────────┐
+│Agent │  │ Simple   │
+│Service│  │ RAG Chat │
+└──────┘  └──────────┘
+```
+
+- **Simple RAG (ChatService)**: Document retrieval + LLM response, no tool calling
+- **Agent Mode (AgentService)**: RAG context + tool calling loop with MCP
+
+### Agent Loop
+
+```
+1. User question + RAG context → LLM with tools
+2. If LLM returns tool_calls:
+   - Execute each tool via MCP client
+   - Append tool results to messages
+   - Return to step 1 (max 10 iterations)
+3. If LLM returns text: Stream response to user
+```
+
+### Available Tools (GitLab)
+
+| Tool | Description |
+|------|-------------|
+| `search_repository` | Search for files by name pattern |
+| `get_file_contents` | Read file content from repository |
+| `list_issues` | List project issues with filters |
+| `get_issue` | Get issue details |
+| `list_merge_requests` | List merge requests with filters |
+| `get_merge_request` | Get MR details and changes |
+
+### Configuration
+
+MCP is configured per-collection via the frontend settings. Requires:
+- `GITLAB_TOKEN` environment variable with `read_api` scope
+- Project path (e.g., `namespace/project-name`)
+- GitLab URL (default: `https://gitlab.com`)
+
 ## Technology Choices
 
 | Choice | Rationale                                                                     |
@@ -122,6 +182,7 @@ USING hnsw (embedding vector_cosine_ops);
 | **Redis** | Fast cache, rate limiting, pub/sub for future features                        |
 | **Ollama** | Local LLM for development without API costs                                   |
 | **SSE** | Simpler than WebSocket and perfect unidirectional streaming                   |
+| **MCP** | Standard protocol for tool integration; extensible to other services          |
 
 ## Future Considerations
 
